@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-
-# Just in time installers, these functions replace themselves with the real command when called for the first time
 
 function curl() {
   unset -f curl
@@ -12,7 +9,6 @@ function curl() {
   curl "$@"
 }
 export -f curl
-
 
 
 function uv() {
@@ -30,7 +26,15 @@ function python() {
   uv run --script "$@"
  }
 
-# If this script is being executed (not sourced) and has an argument, run it with bun
+function pip() {
+  uv pip "$@"
+ }
+
+function venv() {
+  uv venv "$@"
+}
+
+# If this script is being executed (not sourced) and has an argument, run it
 if [[ "${BASH_SOURCE[0]}" == "${0}" && -n "${1}" ]]; then
     python "$@"
     exit $?

@@ -1,27 +1,27 @@
 #!/usr/bin/env ./commands.sh
 import sh # type: ignore
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 import sys
 
 def version():
     branch = os.getenv('CIRCLE_BRANCH', sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip())
-    build_number = os.getenv('CIRCLE_BUILD_NUM', datetime.utcnow().strftime('%Y%m%d%H%M%S'))
+    build_number = os.getenv('CIRCLE_BUILD_NUM', datetime.now(tz=UTC).strftime('%Y%m%d%H%M%S'))
     revisions = sh.git('rev-list', '--count', branch).strip()
     version = f"0.{revisions}.{build_number}"
     print(f"version: {version}")
 
 
 def clean():
-    sh.rm('-rf', 'artifacts')
+    sh.rm('-rf', 'artifacts', _err_to_out=True)
 
 
 def check():
-    sh.mypy('')
+    sh.mypy('', _err_to_out=True)
 
 
 def test(*args):
-    sh.python('-m', 'unittest', 'discover', '-s', 'tests', *args)
+    sh.python('-m', 'unittest', 'discover', '-s', 'test', *args, _err_to_out=True)
 
 
 def build():
@@ -53,7 +53,10 @@ if __name__ == "__main__":
                 print(e.stdout.decode())
                 sys.exit(1)
         else:
-            print(f"{func_name} is not callable.")
+            print(f"Invalid target '{func_name}'")
     else:
-        print(f"Function {func_name} not found.")
-
+        try:
+            sh.uv('run', *sys.argv[1:], _err_to_out=True)
+        except sh.ErrorReturnCode as e:
+            print(e.stdout.decode())
+            sys.exit(e.exit_code)

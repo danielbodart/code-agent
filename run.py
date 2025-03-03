@@ -35,7 +35,7 @@ def start(*args):
 
 
 def ci():
-    print('TODO ci')
+    build()
 
 # Add any additional logic or functions as needed.
 

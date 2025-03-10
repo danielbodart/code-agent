@@ -3,6 +3,7 @@ import sh # type: ignore
 import os
 from datetime import UTC, datetime
 import sys
+import unittest
 
 def version():
     branch = os.getenv('CIRCLE_BRANCH', sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip())
@@ -17,11 +18,14 @@ def clean():
 
 
 def check():
-    sh.mypy('', _err_to_out=True)
+    sh.mypy('src', _err_to_out=True)
 
 
 def test(*args):
-    sh.python('-m', 'unittest', 'discover', '-s', 'test', *args, _err_to_out=True)
+    loader = unittest.TestLoader()
+    suite = loader.discover('test', pattern='test_*.py')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
 
 
 def build():
@@ -31,7 +35,7 @@ def build():
 
 
 def start(*args):
-    print('TODO start', *args)
+    sh.uv('run', 'main.py', *args, _err_to_out=True)
 
 
 def ci():

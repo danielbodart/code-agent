@@ -5,6 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13.2"
 dependencies = [
+    "gymnasium==1.0.0",
+    "hypothesis>=6.128.2",
     "mypy>=1.15.0",
     "sh>=2.2.2",
+    "stable-baselines3==2.5.0",
 ]

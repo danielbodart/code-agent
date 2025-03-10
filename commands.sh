@@ -22,7 +22,7 @@ function uv() {
 export -f uv
 
 
-function python() {
+function python3() {
   uv run --script "$@"
  }
 
@@ -36,6 +36,6 @@ function venv() {
 
 # If this script is being executed (not sourced) and has an argument, run it
 if [[ "${BASH_SOURCE[0]}" == "${0}" && -n "${1}" ]]; then
-    python "$@"
+    python3 "$@"
     exit $?
 fi

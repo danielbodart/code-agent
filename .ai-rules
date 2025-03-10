@@ -19,6 +19,7 @@
    - Only implement explicitly requested features
    - Check `pyproject.toml` for existing libraries and prefer them over adding new ones
    - Always ask before adding new libraries
+   - To add a library run `./run uv add [library]`
    - Run `./run check` to typecheck any Python changes
 
 4. Testing

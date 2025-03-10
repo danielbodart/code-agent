@@ -21,9 +21,9 @@ def check():
     sh.mypy('src', _err_to_out=True)
 
 
-def test(*args):
+def test(pattern = 'test_*.py'):
     loader = unittest.TestLoader()
-    suite = loader.discover('test', pattern='test_*.py')
+    suite = loader.discover('test', pattern)
     runner = unittest.TextTestRunner()
     runner.run(suite)
 

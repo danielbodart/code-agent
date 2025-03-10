@@ -14,11 +14,11 @@ def version():
 
 
 def clean():
-    sh.rm('-rf', 'artifacts', _err_to_out=True)
+    print(sh.rm('-rf', 'artifacts', _err_to_out=True))
 
 
 def check():
-    sh.mypy('src', _err_to_out=True)
+    print(sh.mypy('src', _err_to_out=True))
 
 
 def test(pattern = 'test_*.py'):
@@ -35,7 +35,7 @@ def build():
 
 
 def start(*args):
-    sh.uv('run', 'main.py', *args, _err_to_out=True)
+    print(sh.uv('run', 'src/main.py', *args, _err_to_out=True))
 
 
 def ci():
@@ -60,7 +60,7 @@ if __name__ == "__main__":
             print(f"Invalid target '{func_name}'")
     else:
         try:
-            sh.uv('run', *sys.argv[1:], _err_to_out=True)
+            print(sh.uv('run', *sys.argv[1:], _err_to_out=True))
         except sh.ErrorReturnCode as e:
             print(e.stdout.decode())
             sys.exit(e.exit_code)

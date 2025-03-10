@@ -1,35 +1,31 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from data_generator import DataGenerator
+from .data_generator import generate_addition_example
+from .mask_expression import mask_expression
+from .reward_function import reward_function
 
 class MathEnv(gym.Env):
     def __init__(self):
         super(MathEnv, self).__init__()
-        # Define action and observation space
-        # They must be gymnasium.spaces objects
-        # Example when using discrete actions:
-        self.action_space = spaces.Discrete(10)  # 0-9 for numbers, 10 for operators
-        # Example for using image as input:
-        self.observation_space = spaces.Box(low=0, high=1, shape=(10,), dtype=np.float32)
+        self.action_space = spaces.Discrete(210)
+        self.observation_space = spaces.Box(low=-1, high=105, shape=(5,), dtype=np.int32)
 
-    def reset(self):
-        self.state = DataGenerator.generate_addition_example()
-        return self.state
+    def _get_obs(self):
+        tokens = self.masked_expression.split()
+        operator_encoding = {'+': 101, '-': 102, '*': 103, '/': 104, '=': 105}
+        return [int(token) if token.isdigit() else operator_encoding.get(token, -1) for token in tokens]
 
-    def step(self, action):
-        # Execute one time step within the environment
-        # Example logic for handling an action
-        correct_answer = 42  # Placeholder for the correct answer
-        if action == correct_answer:
-            reward = 1.0  # Max reward for correct answer
-        elif abs(action - correct_answer) <= 1:
-            reward = 0.9  # Partial reward for close answer
-        else:
-            reward = -1.0  # Penalty for wrong answer
+    def reset(self, seed=None):
+        super().reset(seed=seed)
+        self.expression = generate_addition_example()
+        self.original_token, self.masked_expression = mask_expression(self.expression, seed)
+        return self._get_obs()
 
-        done = True  # End the episode after one step
-        return self.state, reward, done, {}
+    def step(self, actions):
+        rewards = [reward_function(self.original_token, str(action)) for action in actions]
+        done = True
+        return self._get_obs(), rewards, done, {} 
 
     def render(self, mode='human'):
         # Render the environment to the screen

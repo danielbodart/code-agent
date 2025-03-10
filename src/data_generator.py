@@ -4,9 +4,7 @@ import warnings
 
 warnings.filterwarnings("ignore", category=NonInteractiveExampleWarning)
 
-class DataGenerator:
-    @staticmethod
-    def generate_addition_example():
-        a = st.integers().example()
-        b = st.integers().example()
-        return f"{a} + {b} = {a + b}"
+def generate_addition_example():
+    a = st.integers(min_value=0, max_value=100).example()
+    b = st.integers(min_value=0, max_value=100).example()
+    return f"{a} + {b} = {a + b}"

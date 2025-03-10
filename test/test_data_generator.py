@@ -1,9 +1,9 @@
-from src.data_generator import DataGenerator
+from src.data_generator import generate_addition_example
 import unittest
 
 class TestDataGenerator(unittest.TestCase):
     def test_generate_addition_example(self):
-        example = DataGenerator.generate_addition_example()
+        example = generate_addition_example()
         self.assertIsInstance(example, str)
         parts = example.split()
         self.assertEqual(parts[1], '+')

@@ -13,9 +13,12 @@ if __name__ == '__main__':
     env = SubprocVecEnv([lambda: MathEnv() for _ in range(cpu)])
 
     # Use PPO to optimize the denoising model
-    model = PPO("MlpPolicy", env, verbose=1, device="cpu")
-    model.learn(total_timesteps=10000)
+    model = PPO("MlpPolicy", env, verbose=1, device="cpu", n_steps=340, gamma=0.9053995634851253, learning_rate=0.00029203107211106104)
+    model.learn(total_timesteps=1000000)  # Increased timesteps
 
     # Save the model
     model.save("ppo_masked_text")
     print("Model saved as 'ppo_masked_text'")
+
+    # Add logging
+    print("Training completed. Evaluate the model's performance.")

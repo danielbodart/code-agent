@@ -44,6 +44,11 @@ def predict(*args):
     print(sh.uv('run', 'src/predict_model.py', *args, _err_to_out=True))
 
 
+def tune(*args):
+    check()
+    print(sh.uv('run', 'src/hyperparamter-tune.py', *args, _err_to_out=True))
+
+
 def ci():
     build()
 

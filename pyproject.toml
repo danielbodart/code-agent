@@ -9,6 +9,7 @@ dependencies = [
     "hypothesis>=6.128.2",
     "mypy>=1.15.0",
     "numpy<2",
+    "optuna>=4.2.1",
     "sh>=2.2.2",
     "stable-baselines3==2.2.1",
     "torch==2.1.0",

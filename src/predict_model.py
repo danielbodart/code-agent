@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.math_env import MathEnv
 
 # Load the trained model
-model = PPO.load("ppo_masked_text")
+model = PPO.load("ppo_masked_text", device="cpu")
 
 # Create the environment
 read_env = MathEnv()

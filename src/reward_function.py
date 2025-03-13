@@ -4,9 +4,9 @@ def reward_function(original, guessed):
     # Remove padding 'P' from the guessed string
     guessed = guessed.replace('P', '')
     
-    # Check for presence of 'M' in guessed
+    # Check for presence of '?' in guessed
     if '?' in guessed:
-        return -1  # Immediate penalty if 'M' is present
+        return -1  # Immediate penalty if '?' is present
     
     # Split original and guessed strings into tokens
     original_tokens = split_expression(original)
@@ -22,5 +22,9 @@ def reward_function(original, guessed):
     
     # Scale reward based on correctness
     reward = correct_count / total_tokens
+    
+    # Apply additional penalties for incorrect guesses
+    incorrect_count = total_tokens - correct_count
+    reward -= 0.5 * incorrect_count / total_tokens
     
     return reward

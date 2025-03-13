@@ -18,7 +18,7 @@ def clean():
 
 
 def check():
-    print(sh.mypy('src', _err_to_out=True))
+    sh.mypy('src', _err_to_out=True)
 
 
 def test(pattern = 'test_*.py'):

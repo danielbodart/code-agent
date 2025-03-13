@@ -13,11 +13,16 @@ read_env = MathEnv()
 
 # Perform predictions on a generated example
 def predict_example():
-    obs, _ = read_env.reset()
     for _ in range(10):  # Predict for a few steps
+        obs, _ = read_env.reset()
         action, _states = model.predict(obs, deterministic=True)
         obs, rewards, terminated, truncated, info = read_env.step(action)
-        read_env.render()
+        # Print the original, masked, and guessed tokens
+        print("Original: ", read_env.expression)
+        print("Masked:   ", read_env.masked_expression)
+        guessed = read_env.tokens_to_string(action)
+        print("Guessed:  ", guessed)
+        print("-------------------")
 
 # Call the prediction function
 predict_example()

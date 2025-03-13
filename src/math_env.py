@@ -1,30 +1,42 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+import random
 from .data_generator import generate_addition_example
 from .mask_expression import mask_expression
 from .reward_function import reward_function
+from .split_expression import split_expression
 
 class MathEnv(gym.Env):
     def __init__(self):
         super(MathEnv, self).__init__()
-        self.action_space = spaces.Discrete(210)
-        self.observation_space = spaces.Box(low=-1, high=105, shape=(5,), dtype=np.int32)
+        # Define the fixed vocabulary including numbers, math symbols, and special tokens
+        self.vocab = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "*", "/", "=", "?", "P"]
+        self.vocab_size = len(self.vocab)
+        # Define action and observation space
+        # MultiDiscrete action space for choosing a token from the vocabulary
+        self.action_space = spaces.MultiDiscrete([self.vocab_size] * 6)  # Assuming max 6 tokens
+        self.observation_space = spaces.Box(low=0, high=self.vocab_size, shape=(6,), dtype=np.int32)
+        self.expression = None
+        self.original_token = None
+        self.masked_expression = None
 
     def _get_obs(self):
-        tokens = self.masked_expression.split()
-        operator_encoding = {'+': 101, '-': 102, '*': 103, '/': 104, '=': 105}
-        return [int(token) if token.isdigit() else operator_encoding.get(token, -1) for token in tokens]
+        tokens = split_expression(self.masked_expression)
+        # Ensure the observation has a fixed size, padding with 'PAD' if necessary
+        obs = [self.vocab.index(token) if token in self.vocab else self.vocab.index('?') for token in tokens]
+        obs += [self.vocab.index('P')] * (6 - len(obs))  # Pad with 'P' to ensure length 6
+        return obs
 
     def reset(self, seed=None):
         super().reset(seed=seed)
         self.expression = generate_addition_example()
         self.original_token, self.masked_expression = mask_expression(self.expression, seed)
-        return self._get_obs(), {}
+        return np.array(self._get_obs()), {}
 
     def step(self, action):
-        reward = reward_function(self.original_token, str(action))
-        return self._get_obs(), reward, True, False, {} 
+        reward = reward_function(self.original_token, self.tokens_to_string(action))
+        return np.array(self._get_obs()), reward, True, False, {} 
 
     def render(self, mode='human'):
         # Render the environment to the screen
@@ -32,3 +44,7 @@ class MathEnv(gym.Env):
 
     def close(self):
         pass
+
+    def tokens_to_string(self, tokens):
+        """Convert a list of token indices back into a string."""
+        return ''.join([self.vocab[token] for token in tokens])

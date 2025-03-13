@@ -20,12 +20,11 @@ class MathEnv(gym.Env):
         super().reset(seed=seed)
         self.expression = generate_addition_example()
         self.original_token, self.masked_expression = mask_expression(self.expression, seed)
-        return self._get_obs()
+        return self._get_obs(), {}
 
-    def step(self, actions):
-        rewards = [reward_function(self.original_token, str(action)) for action in actions]
-        done = True
-        return self._get_obs(), rewards, done, {} 
+    def step(self, action):
+        reward = reward_function(self.original_token, str(action))
+        return self._get_obs(), reward, True, False, {} 
 
     def render(self, mode='human'):
         # Render the environment to the screen

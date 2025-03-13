@@ -23,6 +23,7 @@ export -f uv
 
 
 function python3() {
+  uv python install
   uv run --script "$@"
  }
 
@@ -33,6 +34,8 @@ function pip() {
 function venv() {
   uv venv "$@"
 }
+
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 # If this script is being executed (not sourced) and has an argument, run it
 if [[ "${BASH_SOURCE[0]}" == "${0}" && -n "${1}" ]]; then

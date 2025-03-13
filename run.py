@@ -34,14 +34,19 @@ def build():
     test()
 
 
-def start(*args):
-    print(sh.uv('run', 'src/main.py', *args, _err_to_out=True))
+def train(*args):
+    check()
+    print(sh.uv('run', 'src/train_model.py', *args, _err_to_out=True))
+
+
+def predict(*args):
+    check()
+    print(sh.uv('run', 'src/predict_model.py', *args, _err_to_out=True))
 
 
 def ci():
     build()
 
-# Add any additional logic or functions as needed.
 
 if __name__ == "__main__":
     func_name = 'build' if len(sys.argv) == 1 else sys.argv[1]

@@ -12,9 +12,15 @@ if __name__ == '__main__':
     print(f"Using {cpu} CPU(s)")
     env = SubprocVecEnv([lambda: MathEnv() for _ in range(cpu)])
 
-    # Use PPO to optimize the denoising model
-    model = PPO("MlpPolicy", env, verbose=1, device="cpu", n_steps=340, gamma=0.9053995634851253, learning_rate=0.00029203107211106104)
-    model.learn(total_timesteps=1000000)  # Increased timesteps
+    # Check if a saved model exists
+    model_path = "ppo_masked_text.zip"
+    if os.path.exists(model_path):
+        model = PPO.load(model_path, env, verbose=1, device="cpu", n_steps=340, gamma=0.9053995634851253, learning_rate=0.00029203107211106104)
+        print("Model loaded from", model_path)
+    else:
+        model = PPO("MlpPolicy", env, verbose=1, device="cpu", n_steps=340, gamma=0.9053995634851253, learning_rate=0.00029203107211106104)
+    
+    model.learn(total_timesteps=10000000)  
 
     # Save the model
     model.save("ppo_masked_text")

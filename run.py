@@ -38,6 +38,9 @@ def train(*args):
     check()
     print(sh.uv('run', 'src/train_model.py', *args, _err_to_out=True))
 
+def train_diffusion(*args):
+    check()
+    print(sh.uv('run', 'src/train_diffusion.py', *args, _err_to_out=True))
 
 def predict(*args):
     check()

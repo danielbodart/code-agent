@@ -10,6 +10,8 @@ plus an iterative inference procedure that un-masks tokens step by step.
 
 import random
 import math
+import os
+import argparse
 
 import torch
 import torch.nn.functional as F
@@ -82,7 +84,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         predicted_ids = logits.argmax(dim=-1)  # Get top-1 prediction per token
         return predicted_ids
 
-    def unmask(self, input_text, num_steps=5, fraction_per_step=0.1, max_length=16):
+    def unmask(self, input_text, num_steps=5, fraction_per_step=0.1, max_length=512):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Yields intermediate steps as an iterator.
@@ -122,7 +124,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
             # Yield intermediate result
             yield self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
 
-    def generate(self, input_text, num_steps=5, fraction_per_step=0.1, max_length=16):
+    def generate(self, input_text, num_steps=5, fraction_per_step=0.1, max_length=512):
         """
         Final output: Calls `unmask()` and returns the last generated result.
         """
@@ -138,7 +140,14 @@ class MaskedDiffusionBERT(pl.LightningModule):
 # 4) Main Function
 ###############################
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Train or use a masked diffusion BERT model')
+    parser.add_argument('--train', action='store_true', help='Force training even if checkpoint exists')
+    args = parser.parse_args()
+
+    # Set random seed for reproducibility
     seed_everything(42)
+    print("Seed set to 42")
     torch.set_float32_matmul_precision('medium')
 
     # Load dataset
@@ -175,7 +184,7 @@ def main():
     def tokenize_function(examples):
         return tokenizer(
             examples["text"],
-            max_length=128,
+            max_length=512,
             padding="max_length",
             truncation=True,
             return_tensors="pt"
@@ -209,25 +218,42 @@ def main():
     # Initialize the model
     model = MaskedDiffusionBERT()
     
+    # Define model checkpoint path
+    model_path = "masked_diffusion_model"
+    checkpoint_path = f"{model_path}.ckpt"
+    
+    # Check if checkpoint exists and load it
+    should_train = args.train or not os.path.exists(checkpoint_path)
+    
+    if os.path.exists(checkpoint_path):
+        print(f"Loading checkpoint from {checkpoint_path}")
+        model = MaskedDiffusionBERT.load_from_checkpoint(checkpoint_path, tokenizer=tokenizer)
+        print("Checkpoint loaded successfully")
+    else:
+        print("No checkpoint found, training from scratch")
+        should_train = True
+    
     # PyTorch Lightning Trainer
     trainer = Trainer(
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
         devices=1,
-        max_epochs=3
+        max_epochs=5
     )
     
-    # Train
-    print("Starting training...")
-    trainer.fit(model, dataloader)
-    
-    # Save the trained model
-    model_path = "masked_diffusion_model"
-    model.save_hyperparameters()
-    trainer.save_checkpoint(f"{model_path}.ckpt")
-    print(f"Model saved to {model_path}.ckpt")
+    # Train only if needed
+    if should_train:
+        print("Starting training...")
+        trainer.fit(model, dataloader)
+        
+        # Save the trained model
+        model.save_hyperparameters()
+        trainer.save_checkpoint(checkpoint_path)
+        print(f"Model saved to {checkpoint_path}")
+    else:
+        print("Skipping training as checkpoint exists and --train flag was not provided")
     
     # Test the model on a sample text
-    test_text = "What is the formula for kinetic energy? [MASK][MASK][MASK][MASK][MASK][MASK]"
+    test_text = "How many countries are there in the world? [MASK]"
     print(f"\nTest input: {test_text}")
     print("Generating prediction...")
     prediction = model.generate(test_text)

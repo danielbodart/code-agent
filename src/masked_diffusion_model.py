@@ -5,7 +5,7 @@ from torch import optim
 import pytorch_lightning as pl
 
 class MaskedDiffusionModel(pl.LightningModule):
-    def __init__(self, vocab_size=100, embedding_dim=64, T=1000, hidden_dim=128, num_layers=2, mask_token_id=0):
+    def __init__(self, vocab_size=100, embedding_dim=64, timesteps=1000, hidden_dim=128, num_layers=2, mask_token_id=0):
         """
         Initialize the masked diffusion model based on the MDLM approach.
         
@@ -23,7 +23,7 @@ class MaskedDiffusionModel(pl.LightningModule):
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         
         # Timestep embedding (confirmed in MDLM paper, Section 3.2)
-        self.time_embedding = nn.Embedding(T, embedding_dim)
+        self.time_embedding = nn.Embedding(timesteps, embedding_dim)
         
         # Transformer encoder with visible layers
         encoder_layer = nn.TransformerEncoderLayer(
@@ -42,11 +42,11 @@ class MaskedDiffusionModel(pl.LightningModule):
         self.out = nn.Linear(embedding_dim, vocab_size)
         
         # Diffusion parameters
-        self.T = T
+        self.T = timesteps
         self.mask_token_id = mask_token_id
         
         # Linear masking schedule (simplified; MDLM uses a schedule to control masking)
-        self.mask_prob_schedule = torch.linspace(0, 1, T)  # 0% to 100% masking over T steps
+        self.mask_prob_schedule = torch.linspace(0, 1, timesteps)  # 0% to 100% masking over T steps
 
     def get_masked_sequence(self, tokens, t):
         """
@@ -93,6 +93,20 @@ class MaskedDiffusionModel(pl.LightningModule):
         # Predict token probabilities
         logits = self.out(transformer_out)  # (batch_size, seq_len, vocab_size)
         return logits
+
+    def predict(self, input_tensor):
+        """
+        Predict the output for the given input tensor.
+        Args:
+            input_tensor (torch.Tensor): The input tensor containing tokenized and masked sequences.
+        Returns:
+            torch.Tensor: The predicted output tensor.
+        """
+        self.eval()
+        with torch.no_grad():
+            t = torch.randint(0, self.T, (input_tensor.size(0),), device=input_tensor.device)
+            output = self(input_tensor, t)
+        return output
 
     def training_step(self, batch, batch_idx):
         """

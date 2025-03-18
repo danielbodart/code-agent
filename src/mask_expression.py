@@ -8,5 +8,5 @@ def mask_expression(expression: str, seed: Optional[int] = None) -> tuple:
     tokens = split_expression(expression)
     mask_idx = random.choice(range(len(tokens)))
     original_token = tokens[mask_idx]
-    tokens[mask_idx] = '?'
-    return original_token, ''.join(tokens)
+    tokens[mask_idx] = '<mask>'
+    return original_token, ' '.join(tokens)

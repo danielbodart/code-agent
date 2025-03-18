@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11.11"
 dependencies = [
+    "datasets>=3.4.1",
     "gymnasium==0.29.1",
     "hypothesis>=6.128.2",
     "lightning>=2.5.0.post0",
@@ -14,4 +15,5 @@ dependencies = [
     "sh>=2.2.2",
     "stable-baselines3==2.2.1",
     "torch==2.1.0",
+    "transformers>=4.49.0",
 ]

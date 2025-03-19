@@ -60,12 +60,14 @@ class MaskedDiffusionBERT(pl.LightningModule):
         masked_inputs = input_ids.clone()
         masked_inputs[mask] = self.mask_token_id  # Replace tokens with [MASK]
 
-        # 2) Forward pass
-        logits = self.forward(masked_inputs, attention_mask)
-
-        # 3) Compute loss only for masked positions
+        # 2) Get the last logits from the predict generator
+        last_logits = None
+        for _, logits in self.predict(masked_inputs, attention_mask, fraction_per_step=0.2):
+            last_logits = logits
+        
+        # 3) Compute loss only for masked positions using the last logits
         loss = F.cross_entropy(
-            logits.view(-1, self.model.config.vocab_size)[mask.view(-1)], 
+            last_logits.view(-1, self.model.config.vocab_size)[mask.view(-1)], 
             input_ids.view(-1)[mask.view(-1)]
         )
         
@@ -75,64 +77,98 @@ class MaskedDiffusionBERT(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
 
-    def predict(self, input_ids, attention_mask):
+    def predict(self, input_ids, attention_mask, fraction_per_step=0.1, max_length=512):
         """
-        Single-step unmasking: Predicts missing tokens in one forward pass.
-        Returns the most likely token for each masked position.
+        Iterative unmasking generator: Takes masked input_ids and gradually fills them in.
+        Yields (updated_input_ids, logits) tuples at each step of the unmasking process.
+        
+        Args:
+            input_ids: Tensor of token IDs, with some positions containing mask tokens
+            attention_mask: Tensor indicating which tokens to attend to (1) vs ignore (0)
+            fraction_per_step: Fraction of masked tokens to unmask in each step
+            
+        Yields:
+            tuple: (updated_input_ids, logits)
+                - updated_input_ids: Current state of tokens with some positions unmasked
+                - logits: Raw logits from the model for all positions
         """
-        logits = self.forward(input_ids, attention_mask)
-        predicted_ids = logits.argmax(dim=-1)  # Get top-1 prediction per token
-        return predicted_ids
+        input_ids = input_ids.clone()
+        
+        # Create a mask to track which tokens were originally masked
+        original_mask = (input_ids == self.mask_token_id)
+        
+        # Calculate the number of masked tokens
+        num_masked_tokens = original_mask.sum().item()
+        
+        # Calculate the number of steps needed (10% at a time, plus 50% extra for refinement)
+        total_steps = max(2, int(1.5 / fraction_per_step))
+        
+        # Calculate how many tokens to unmask per step (10% of original masked tokens)
+        unmask_per_step = max(1, int(fraction_per_step * num_masked_tokens))
+        
+        # Track which tokens have been unmasked so far
+        unmasked_so_far = torch.zeros_like(original_mask)
+        
+        for step in range(total_steps):
+            # Forward pass to get logits for current state
+            logits = self.forward(input_ids, attention_mask)
+            
+            # Get top-1 prediction for each token
+            predicted_ids = logits.argmax(dim=-1)
+            
+            # Identify which tokens are still masked
+            still_masked = original_mask & (~unmasked_so_far)
+            
+            # Get indices of still masked tokens
+            masked_indices = still_masked.nonzero(as_tuple=False)
+            
+            # Select random subset of masked tokens to reveal (up to unmask_per_step)
+            indices_to_unmask = masked_indices[torch.randperm(masked_indices.size(0))[:min(unmask_per_step, masked_indices.size(0))]]
+            
+            # Get indices of previously unmasked tokens
+            unmasked_indices = (original_mask & unmasked_so_far).nonzero(as_tuple=False)
+            
+            # Combine both sets of indices to update
+            all_indices_to_update = torch.cat([indices_to_unmask, unmasked_indices], dim=0) if unmasked_indices.size(0) > 0 else indices_to_unmask
+            
+            # Update all tokens in one go
+            for (b_idx, t_idx) in all_indices_to_update:
+                input_ids[b_idx, t_idx] = predicted_ids[b_idx, t_idx]
+                # Mark newly unmasked tokens
+                if still_masked[b_idx, t_idx]:
+                    unmasked_so_far[b_idx, t_idx] = True
+            
+            # Yield both the updated input_ids and the logits
+            yield input_ids.clone(), logits
 
-    def unmask(self, input_text, num_steps=5, fraction_per_step=0.1, max_length=512):
+    def unmask(self, input_text, fraction_per_step=0.1, max_length=512):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Yields intermediate steps as an iterator.
-        - Uses `predict()` for single-step fills.
+        - Uses the predict generator for iterative unmasking.
         """
         tokens = self.tokenizer(
             input_text, return_tensors='pt', max_length=max_length, truncation=True, padding='max_length'
         )
         input_ids = tokens['input_ids'].clone()
         attention_mask = tokens['attention_mask']
+        
+        # Use predict generator for iterative unmasking
+        for updated_ids, _ in self.predict(input_ids, attention_mask, fraction_per_step):
+            # Yield the decoded text at each step
+            yield self.tokenizer.decode(updated_ids[0], skip_special_tokens=True)
 
-        # Identify which tokens are masked
-        still_masked = (input_ids == self.mask_token_id)
-
-        for step in range(num_steps):
-            if not still_masked.any():
-                break  # Stop early if no more [MASK] tokens
-
-            # Decide how many to unmask this step (e.g., 10% of still-masked tokens)
-            masked_indices = still_masked.nonzero(as_tuple=False)
-            num_masked = masked_indices.size(0)
-            unmask_count = max(1, int(fraction_per_step * num_masked))
-
-            # Select random subset of masked tokens to reveal
-            chosen_indices = masked_indices[torch.randperm(num_masked)[:unmask_count]]
-
-            # Single-step predict
-            predicted_ids = self.predict(input_ids, attention_mask)
-
-            # Replace only the chosen masked positions with predicted tokens
-            for (b_idx, t_idx) in chosen_indices:
-                input_ids[b_idx, t_idx] = predicted_ids[b_idx, t_idx]
-
-            # Update mask tracking
-            still_masked = (input_ids == self.mask_token_id)
-
-            # Yield intermediate result
-            yield self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
-
-    def generate(self, input_text, num_steps=5, fraction_per_step=0.1, max_length=512):
+    def generate(self, input_text, fraction_per_step=0.1, max_length=512):
         """
-        Final output: Calls `unmask()` and returns the last generated result.
+        Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
+        - Returns only the final result.
+        - Uses the predict generator for iterative unmasking.
         """
-        final_text = None
-        for text in self.unmask(input_text, num_steps, fraction_per_step, max_length):
-            final_text = text  # Keep updating to get the last step
-        return final_text
-
+        # Use the unmask generator but only return the last item
+        final_result = None
+        for result in self.unmask(input_text, fraction_per_step, max_length):
+            final_result = result
+        return final_result
 
 
 
@@ -147,7 +183,6 @@ def main():
 
     # Set random seed for reproducibility
     seed_everything(42)
-    print("Seed set to 42")
     torch.set_float32_matmul_precision('medium')
 
     # Load dataset
@@ -239,6 +274,8 @@ def main():
         devices=1,
         max_epochs=5
     )
+
+    should_train = False
     
     # Train only if needed
     if should_train:
@@ -253,11 +290,10 @@ def main():
         print("Skipping training as checkpoint exists and --train flag was not provided")
     
     # Test the model on a sample text
-    test_text = "How many countries are there in the world? [MASK]"
+    test_text = "Pick a country in Asia, it's capital is [MASK], and the country is [MASK]. Now choose a country in Africa, it's capital is [MASK], and the country is [MASK]"
     print(f"\nTest input: {test_text}")
-    print("Generating prediction...")
-    prediction = model.generate(test_text)
-    print(f"Prediction: {prediction}")
+    for result in model.unmask(test_text):
+        print(f"Prediction: {result}")
 
 
 if __name__ == "__main__":

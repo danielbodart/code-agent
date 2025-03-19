@@ -8,14 +8,12 @@ plus an iterative inference procedure that un-masks tokens step by step.
 
 """
 
-import random
 import math
-import os
 import argparse
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
@@ -25,8 +23,32 @@ from datasets import load_dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForMaskedLM,
-    AutoConfig,
 )
+
+
+def sample_logits(logits, temperature=1.0):
+    """
+    Takes a [batch_size, seq_len, vocab_size] logits tensor.
+    If temperature=0, do greedy decoding (argmax).
+    Else, apply temperature and sample from softmax.
+    """
+    if temperature == 0:
+        # Greedy decode
+        return logits.argmax(dim=-1)
+    else:
+        # Sample with temperature
+        logits = logits / temperature
+        probs = F.softmax(logits, dim=-1)
+        
+        # Reshape for multinomial sampling
+        batch_size, seq_len, vocab_size = probs.size()
+        flat_probs = probs.view(-1, vocab_size)
+        
+        # Sample from the flattened distribution
+        samples = torch.multinomial(flat_probs, num_samples=1)
+        
+        # Reshape back to [batch_size, seq_len]
+        return samples.view(batch_size, seq_len)
 
 
 ###############################
@@ -62,7 +84,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
 
         # 2) Get the last logits from the predict generator
         last_logits = None
-        for _, logits in self.predict(masked_inputs, attention_mask, fraction_per_step=0.2):
+        for _, logits in self.predict(masked_inputs, attention_mask, fraction_per_step=0.1, temperature=1.0):
             last_logits = logits
         
         # 3) Compute loss only for masked positions using the last logits
@@ -77,7 +99,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
 
-    def predict(self, input_ids, attention_mask, fraction_per_step=0.1, max_length=512):
+    def predict(self, input_ids, attention_mask, fraction_per_step=0.1, temperature=1.0):
         """
         Iterative unmasking generator: Takes masked input_ids and gradually fills them in.
         Yields (updated_input_ids, logits) tuples at each step of the unmasking process.
@@ -86,6 +108,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
             input_ids: Tensor of token IDs, with some positions containing mask tokens
             attention_mask: Tensor indicating which tokens to attend to (1) vs ignore (0)
             fraction_per_step: Fraction of masked tokens to unmask in each step
+            temperature: Controls randomness in token selection (higher = more random)
             
         Yields:
             tuple: (updated_input_ids, logits)
@@ -100,8 +123,9 @@ class MaskedDiffusionBERT(pl.LightningModule):
         # Calculate the number of masked tokens
         num_masked_tokens = original_mask.sum().item()
         
-        # Calculate the number of steps needed (10% at a time, plus 50% extra for refinement)
-        total_steps = max(2, int(1.5 / fraction_per_step))
+        # Add 50% extra steps for refinement
+        # For 4 tokens: 4 + 4*0.5 = 6 steps total
+        total_steps = max(2, int(num_masked_tokens * 1.5))
         
         # Calculate how many tokens to unmask per step (10% of original masked tokens)
         unmask_per_step = max(1, int(fraction_per_step * num_masked_tokens))
@@ -109,13 +133,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         # Track which tokens have been unmasked so far
         unmasked_so_far = torch.zeros_like(original_mask)
         
-        for step in range(total_steps):
-            # Forward pass to get logits for current state
-            logits = self.forward(input_ids, attention_mask)
-            
-            # Get top-1 prediction for each token
-            predicted_ids = logits.argmax(dim=-1)
-            
+        for _ in range(total_steps):
             # Identify which tokens are still masked
             still_masked = original_mask & (~unmasked_so_far)
             
@@ -129,9 +147,15 @@ class MaskedDiffusionBERT(pl.LightningModule):
             unmasked_indices = (original_mask & unmasked_so_far).nonzero(as_tuple=False)
             
             # Combine both sets of indices to update
-            all_indices_to_update = torch.cat([indices_to_unmask, unmasked_indices], dim=0) if unmasked_indices.size(0) > 0 else indices_to_unmask
+            all_indices_to_update = torch.cat([indices_to_unmask, unmasked_indices], dim=0)
+
+            # Forward pass to get logits for current state
+            logits = self.forward(input_ids, attention_mask)
             
-            # Update all tokens in one go
+            # Apply temperature and sample or take argmax
+            predicted_ids = sample_logits(logits, temperature)
+            
+            # Update all eligible tokens
             for (b_idx, t_idx) in all_indices_to_update:
                 input_ids[b_idx, t_idx] = predicted_ids[b_idx, t_idx]
                 # Mark newly unmasked tokens
@@ -141,11 +165,10 @@ class MaskedDiffusionBERT(pl.LightningModule):
             # Yield both the updated input_ids and the logits
             yield input_ids.clone(), logits
 
-    def unmask(self, input_text, fraction_per_step=0.1, max_length=512):
+    def unmask(self, input_text, fraction_per_step=0.1, temperature=1.0, max_length=512):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Yields intermediate steps as an iterator.
-        - Uses the predict generator for iterative unmasking.
         """
         tokens = self.tokenizer(
             input_text, return_tensors='pt', max_length=max_length, truncation=True, padding='max_length'
@@ -154,19 +177,18 @@ class MaskedDiffusionBERT(pl.LightningModule):
         attention_mask = tokens['attention_mask']
         
         # Use predict generator for iterative unmasking
-        for updated_ids, _ in self.predict(input_ids, attention_mask, fraction_per_step):
+        for updated_ids, _ in self.predict(input_ids, attention_mask, fraction_per_step, temperature):
             # Yield the decoded text at each step
             yield self.tokenizer.decode(updated_ids[0], skip_special_tokens=True)
 
-    def generate(self, input_text, fraction_per_step=0.1, max_length=512):
+    def generate(self, input_text, fraction_per_step=0.1, temperature=1.0, max_length=512):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Returns only the final result.
-        - Uses the predict generator for iterative unmasking.
         """
         # Use the unmask generator but only return the last item
         final_result = None
-        for result in self.unmask(input_text, fraction_per_step, max_length):
+        for result in self.unmask(input_text, fraction_per_step, temperature, max_length):
             final_result = result
         return final_result
 
@@ -182,7 +204,7 @@ def main():
     args = parser.parse_args()
 
     # Set random seed for reproducibility
-    seed_everything(42)
+    # seed_everything(42)
     torch.set_float32_matmul_precision('medium')
 
     # Load dataset
@@ -276,7 +298,7 @@ def main():
     )
 
     should_train = False
-    
+
     # Train only if needed
     if should_train:
         print("Starting training...")
@@ -290,9 +312,19 @@ def main():
         print("Skipping training as checkpoint exists and --train flag was not provided")
     
     # Test the model on a sample text
-    test_text = "Pick a country in Asia, it's capital is [MASK], and the country is [MASK]. Now choose a country in Africa, it's capital is [MASK], and the country is [MASK]"
+    test_text = """Question: How many people live in [MASK][MASK]? Answer: [MASK][MASK]"""
     print(f"\nTest input: {test_text}")
-    for result in model.unmask(test_text):
+    
+    print("\nWith temperature=1.0 (balanced):")
+    for result in model.unmask(test_text, temperature=1.0):
+        print(f"Prediction: {result}")
+    
+    print("\nWith temperature=0.5 (more focused):")
+    for result in model.unmask(test_text, temperature=0.5):
+        print(f"Prediction: {result}")
+    
+    print("\nWith temperature=1.5 (more random):")
+    for result in model.unmask(test_text, temperature=1.5):
         print(f"Prediction: {result}")
 
 

@@ -57,7 +57,7 @@ def sample_logits(logits, temperature=1.0):
 
 
 class MaskedDiffusionBERT(pl.LightningModule):
-    def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-4):
+    def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-5):
         super().__init__()
         self.model = AutoModelForMaskedLM.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)

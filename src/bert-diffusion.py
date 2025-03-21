@@ -10,7 +10,7 @@ plus an iterative inference procedure that un-masks tokens step by step.
 
 import math
 import argparse
-
+import os
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -57,7 +57,7 @@ def sample_logits(logits, temperature=1.0):
 
 
 class MaskedDiffusionBERT(pl.LightningModule):
-    def __init__(self, model_name="answerdotai/ModernBERT-base", lr=1e-4):
+    def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-4):
         super().__init__()
         self.model = AutoModelForMaskedLM.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -82,14 +82,15 @@ class MaskedDiffusionBERT(pl.LightningModule):
         masked_inputs = input_ids.clone()
         masked_inputs[mask] = self.mask_token_id  # Replace tokens with [MASK]
 
-        # 2) Get the last logits from the predict generator
-        last_logits = None
-        for _, logits in self.predict(masked_inputs, attention_mask, fraction_per_step=0.1, temperature=1.0):
-            last_logits = logits
+        # 2) Get the first logits from the predict generator
+        first_logits = None
+        for _, logits in self.predict(masked_inputs, attention_mask, fraction_per_step=0.1):
+            first_logits = logits
+            break  # Only take the first logits
         
-        # 3) Compute loss only for masked positions using the last logits
+        # 3) Compute loss only for masked positions using the first logits
         loss = F.cross_entropy(
-            last_logits.view(-1, self.model.config.vocab_size)[mask.view(-1)], 
+            first_logits.view(-1, self.model.config.vocab_size)[mask.view(-1)], 
             input_ids.view(-1)[mask.view(-1)]
         )
         
@@ -176,6 +177,8 @@ class MaskedDiffusionBERT(pl.LightningModule):
         input_ids = tokens['input_ids'].clone()
         attention_mask = tokens['attention_mask']
         
+        input_ids = input_ids.clone()
+        
         # Use predict generator for iterative unmasking
         for updated_ids, _ in self.predict(input_ids, attention_mask, fraction_per_step, temperature):
             # Yield the decoded text at each step
@@ -198,135 +201,40 @@ class MaskedDiffusionBERT(pl.LightningModule):
 # 4) Main Function
 ###############################
 def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Train or use a masked diffusion BERT model')
-    parser.add_argument('--train', action='store_true', help='Force training even if checkpoint exists')
-    args = parser.parse_args()
-
     # Set random seed for reproducibility
     # seed_everything(42)
     torch.set_float32_matmul_precision('medium')
 
-    # Load dataset
-    print("Loading facebook/natural_reasoning dataset...")
-    raw_dataset = load_dataset("facebook/natural_reasoning", split="train")
-    
-    # Filter to only include examples with a reference answer
-    print("Filtering dataset...")
-    filtered_dataset = raw_dataset.filter(
-        lambda example: bool(example["reference_answer"]),
-        desc="Filtering examples with reference answers"
-    )
-    
-    # Limit to first 10,000 examples (or any other number)
-    max_examples = 10000
-    if len(filtered_dataset) > max_examples:
-        print(f"Limiting to {max_examples} examples...")
-        filtered_dataset = filtered_dataset.select(range(max_examples))
-    
-    # Combine question and reference_answer in one step
-    print("Processing dataset...")
-    processed_dataset = filtered_dataset.map(
-        lambda example: {"text": f"{example['question']} {example['reference_answer']}"},
-        remove_columns=filtered_dataset.column_names,  # Remove original columns
-        desc="Combining question and answer"
-    )
-    
-    print(f"Processed dataset size: {len(processed_dataset)}")
-    
-    # Initialize tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
-    
-    # Tokenize the dataset in batches for efficiency
-    def tokenize_function(examples):
-        return tokenizer(
-            examples["text"],
-            max_length=512,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt"
-        )
-    
-    print("Tokenizing dataset...")
-    tokenized_dataset = processed_dataset.map(
-        tokenize_function,
-        batched=True,
-        batch_size=1000,  # Process 1000 examples at once
-        desc="Tokenizing dataset",
-        remove_columns=["text"]  # Remove the original text column
-    )
-    
-    # Format dataset to return PyTorch tensors
-    tokenized_dataset.set_format(type="torch", columns=["input_ids", "attention_mask"])
-    
-    # Create DataLoader
-    import os
-    num_workers = min(os.cpu_count(), 16)  # Use available cores but cap at 16 to avoid excessive overhead
-    print(f"Using {num_workers} workers for data loading")
-    
-    dataloader = DataLoader(
-        tokenized_dataset, 
-        batch_size=8, 
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True  # This can speed up data transfer to GPU
-    )
-    
+    # Check for GPU availability and set the device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        print(f"GPU available: {torch.cuda.get_device_name(0)}")
+        print(f"Using device: {device}")
+    else:
+        print("No GPU available, using CPU")
+        print(f"Using device: {device}")
+
     # Initialize the model
     model = MaskedDiffusionBERT()
     
-    # Define model checkpoint path
-    model_path = "masked_diffusion_model"
-    checkpoint_path = f"{model_path}.ckpt"
+    # Explicitly move the model to the selected device
+    model = model.to(device)
     
-    # Check if checkpoint exists and load it
-    should_train = args.train or not os.path.exists(checkpoint_path)
-    
-    if os.path.exists(checkpoint_path):
-        print(f"Loading checkpoint from {checkpoint_path}")
-        model = MaskedDiffusionBERT.load_from_checkpoint(checkpoint_path, tokenizer=tokenizer)
-        print("Checkpoint loaded successfully")
-    else:
-        print("No checkpoint found, training from scratch")
-        should_train = True
-    
-    # PyTorch Lightning Trainer
-    trainer = Trainer(
-        accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=1,
-        max_epochs=5
-    )
-
-    should_train = False
-
-    # Train only if needed
-    if should_train:
-        print("Starting training...")
-        trainer.fit(model, dataloader)
-        
-        # Save the trained model
-        model.save_hyperparameters()
-        trainer.save_checkpoint(checkpoint_path)
-        print(f"Model saved to {checkpoint_path}")
-    else:
-        print("Skipping training as checkpoint exists and --train flag was not provided")
-    
-    # Test the model on a sample text
-    test_text = """Question: How many people live in [MASK][MASK]? Answer: [MASK][MASK]"""
+    # Test the model on a sample text with device handling
+    test_text = """Question: What is the capital of [MASK]? Answer: [MASK]"""
     print(f"\nTest input: {test_text}")
     
-    print("\nWith temperature=1.0 (balanced):")
-    for result in model.unmask(test_text, temperature=1.0):
+    # Use the model's predict method with device-aware tensors
+    for result in model.unmask(test_text):
         print(f"Prediction: {result}")
     
-    print("\nWith temperature=0.5 (more focused):")
-    for result in model.unmask(test_text, temperature=0.5):
-        print(f"Prediction: {result}")
-    
-    print("\nWith temperature=1.5 (more random):")
-    for result in model.unmask(test_text, temperature=1.5):
-        print(f"Prediction: {result}")
 
+    print("\n===== MEMORY USAGE STATISTICS =====")
+    print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
+    print(f"GPU Memory Allocated: {torch.cuda.memory_allocated(0)} MB")
+    print(f"GPU Memory Reserved: {torch.cuda.memory_reserved(0)} MB")
+    print(f"GPU Max Memory Allocated: {torch.cuda.max_memory_allocated(0)} MB")
+    
 
 if __name__ == "__main__":
     main()

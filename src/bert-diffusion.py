@@ -205,20 +205,8 @@ def main():
     # seed_everything(42)
     torch.set_float32_matmul_precision('medium')
 
-    # Check for GPU availability and set the device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if torch.cuda.is_available():
-        print(f"GPU available: {torch.cuda.get_device_name(0)}")
-        print(f"Using device: {device}")
-    else:
-        print("No GPU available, using CPU")
-        print(f"Using device: {device}")
-
     # Initialize the model
     model = MaskedDiffusionBERT()
-    
-    # Explicitly move the model to the selected device
-    model = model.to(device)
     
     # Test the model on a sample text with device handling
     test_text = """Question: What is the capital of [MASK]? Answer: [MASK]"""
@@ -228,12 +216,6 @@ def main():
     for result in model.unmask(test_text):
         print(f"Prediction: {result}")
     
-
-    print("\n===== MEMORY USAGE STATISTICS =====")
-    print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
-    print(f"GPU Memory Allocated: {torch.cuda.memory_allocated(0)} MB")
-    print(f"GPU Memory Reserved: {torch.cuda.memory_reserved(0)} MB")
-    print(f"GPU Max Memory Allocated: {torch.cuda.max_memory_allocated(0)} MB")
     
 
 if __name__ == "__main__":

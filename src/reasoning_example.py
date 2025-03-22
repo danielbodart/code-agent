@@ -181,3 +181,14 @@ class TokenizedExamples:
         masked_inputs[mask] = self.tokenizer.mask_token_id
         
         return TokenizedExamples(self.tokenizer, masked_inputs, self.attention_mask)
+
+    @property
+    def labels(self):
+        """
+        Returns labels for masked language modeling.
+        - Original token IDs for maskable tokens
+        - -100 for unmaskable tokens (ignored in loss calculation)
+        """
+        labels = self.token_ids.clone()
+        labels[self.maskable == 0] = -100
+        return labels

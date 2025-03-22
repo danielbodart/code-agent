@@ -131,3 +131,21 @@ class TestTokenizedExample(unittest.TestCase):
         self.assertGreater(mask_count, 0, "Should mask at least some tokens")
         max_maskable = (tokenized.maskable == 1).sum().item()
         self.assertLess(mask_count, max_maskable, "Should not mask 100% of maskable tokens")
+        
+    def test_labels(self):
+        example = ReasoningExample(
+            "This is a question",
+            ["This is reasoning"],
+            "This is an answer"
+        )
+        
+        tokenized = tokenize([example], self.tokenizer)
+        
+        labels = tokenized.labels
+        maskable = tokenized.maskable
+        
+        # Check that unmaskable tokens have label -100
+        self.assertTrue(torch.all(labels[maskable == 0] == -100))
+        
+        # Check that maskable tokens have their original token IDs
+        self.assertTrue(torch.all(labels[maskable == 1] == tokenized.token_ids[maskable == 1]))

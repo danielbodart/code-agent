@@ -2,7 +2,8 @@
 Tests for the ReasoningExample and TokenizedExample classes.
 """
 import unittest
-from src.reasoning_example import ReasoningExample
+from src.reasoning_example import ReasoningExample, tokenize
+import torch
 
 
 class TestReasoningExample(unittest.TestCase):
@@ -31,7 +32,6 @@ class TestReasoningExample(unittest.TestCase):
         self.assertEqual(items[2], "<answer>Answer</answer>")
 
 from transformers import AutoTokenizer
-from src.reasoning_example import tokenize
 from src.tokens import open_tag, close_tag
 
 class TestTokenizedExample(unittest.TestCase):
@@ -114,3 +114,20 @@ class TestTokenizedExample(unittest.TestCase):
         self.assertEqual(lengths.shape, (2,))
         self.assertEqual(lengths[0].item(), 30)
         self.assertEqual(lengths[1].item(), 44)
+
+    def test_masking_percentage(self):
+        """Test that masking with percentage produces reasonable results."""
+        example = ReasoningExample(
+            "This is a question",
+            ["This is reasoning step one"],
+            "This is the answer"
+        )
+        
+        tokenized = tokenize([example], self.tokenizer)
+        
+        masked = tokenized.mask(percentage=0.5)
+        mask_count = (masked.token_ids == self.tokenizer.mask_token_id).sum().item()
+        
+        self.assertGreater(mask_count, 0, "Should mask at least some tokens")
+        max_maskable = (tokenized.maskable == 1).sum().item()
+        self.assertLess(mask_count, max_maskable, "Should not mask 100% of maskable tokens")

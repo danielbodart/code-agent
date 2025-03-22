@@ -64,14 +64,14 @@ def simple(*args):
     sh.uv('run', 'src/simple_masked_model.py', *args, _out=sys.stdout, _err=sys.stderr)
 
 
-def bert(*args):
-    check()
-    sh.uv('run', 'src/bert-diffusion.py', *args, _out=sys.stdout, _err=sys.stderr)
-
-
 def modern_bert(*args):
     check()
     sh.uv('run', 'src/modern-bert-test.py', *args, _out=sys.stdout, _err=sys.stderr)
+
+
+def bert(*args):
+    check()
+    sh.uv('run', 'src/predict_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
 
 
 def ci():

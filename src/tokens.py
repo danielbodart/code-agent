@@ -22,6 +22,7 @@ def find_sequence(tensor, pattern):
     Returns:
         A tensor of indices where the pattern starts
     """
+    # Convert pattern to tensor if needed
     if not isinstance(pattern, torch.Tensor):
         pattern = torch.tensor(pattern, device=tensor.device)
     
@@ -30,7 +31,7 @@ def find_sequence(tensor, pattern):
     
     # If pattern is longer than sequence, it can't be found
     if pattern_len > seq_len:
-        return torch.tensor([], dtype=torch.long, device=tensor.device)
+        return torch.tensor([], device=tensor.device)
     
     # Use unfold to create sliding windows
     windows = tensor.unfold(0, pattern_len, 1)
@@ -40,6 +41,7 @@ def find_sequence(tensor, pattern):
     match_indices = torch.where(matches)[0]
     
     return match_indices
+
 
 def find_sequences_batch(batch_tensor, pattern):
     """
@@ -60,33 +62,3 @@ def find_sequences_batch(batch_tensor, pattern):
     
     return results
 
-def create_tag_mask(tensor, tag_tokens):
-    """
-    Create a mask where all XML tags are marked as False (not maskable).
-    
-    Args:
-        tensor: The token tensor to analyze
-        tag_tokens: List of token IDs that indicate tags (like tag_start, tag_end)
-    
-    Returns:
-        A boolean tensor where True indicates non-tag tokens
-    """
-    mask = torch.ones_like(tensor, dtype=torch.bool)
-    
-    # Mark positions with tag tokens as False
-    for token in tag_tokens:
-        mask = mask & (tensor != token)
-    
-    # Find tag spans
-    in_tag = False
-    for i in range(tensor.size(0)):
-        if tensor[i] == tag_start:
-            in_tag = True
-        elif tensor[i] == tag_end:
-            in_tag = False
-            continue
-        
-        if in_tag:
-            mask[i] = False
-    
-    return mask

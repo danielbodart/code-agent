@@ -86,8 +86,12 @@ class TestTokenizedExample(unittest.TestCase):
         )
 
         tokenized = tokenize([example], self.tokenizer)
-
-        self.assertEqual(tokenized.maskable, [[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0]]) 
+        
+        # Only compare up to the actual length of the example
+        actual_length = tokenized.lengths[0].item()
+        maskable_tokens = tokenized.maskable[0, :actual_length].tolist()
+        
+        self.assertEqual(maskable_tokens, [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0]) 
         
     def test_lengths(self):
         """Test that the lengths property correctly calculates the length of each example."""

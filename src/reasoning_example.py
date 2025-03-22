@@ -101,10 +101,12 @@ class TokenizedExamples:
         - Padding tokens are not maskable (0)
         
         Returns:
-            List of integer lists, one per example in the batch, where 1 indicates maskable tokens
+            torch.Tensor: A tensor of the same shape as token_ids, where 1 indicates maskable tokens
         """
         batch_size = self.token_ids.size(0)
-        results = []
+        
+        # Initialize a tensor of zeros (not maskable)
+        maskable_tensor = torch.zeros_like(self.token_ids)
         
         # Define tags and their maskability
         tags = {
@@ -141,9 +143,6 @@ class TokenizedExamples:
         ]
         
         for i in range(batch_size):
-            # Start with all tokens not maskable (0)
-            maskable = torch.zeros_like(self.token_ids[i], dtype=torch.int)
-            
             # Process each tag
             for tag_name, is_maskable in tags.items():
                 if is_maskable and len(open_positions[tag_name][i]) > 0 and len(close_positions[tag_name][i]) > 0:
@@ -152,17 +151,16 @@ class TokenizedExamples:
                     end = close_positions[tag_name][i][0]
                     
                     # Make these tokens maskable (1)
-                    maskable[start:end] = 1
+                    maskable_tensor[i, start:end] = 1
             
             # Make special tokens not maskable (0)
             for token_id in special_token_ids:
-                maskable = maskable * (self.token_ids[i] != token_id).int()
-            
-            # Only include tokens up to the actual length in the result
-            seq_len = self.lengths[i].item()
-            results.append(maskable[:seq_len].tolist())
+                maskable_tensor[i] = maskable_tensor[i] * (self.token_ids[i] != token_id).int()
         
-        return results
+        # Apply attention mask to ensure only tokens with attention are maskable
+        maskable_tensor = maskable_tensor * self.attention_mask
+        
+        return maskable_tensor
 
     def mask(self, percentage: float):
         """
@@ -175,13 +173,8 @@ class TokenizedExamples:
         Returns:
             A new TokenizedExamples instance with masked tokens
         """
-        # Convert maskable lists to tensor
-        maskable_tensor = torch.zeros_like(self.token_ids)
-        for i, maskable_list in enumerate(self.maskable):
-            maskable_tensor[i, :len(maskable_list)] = torch.tensor(maskable_list, device=self.token_ids.device)
-        
-        # Only consider tokens that are maskable and have attention
-        mask = (torch.rand_like(self.token_ids.float()) < percentage) & (maskable_tensor == 1)
+        # Only consider tokens that are maskable
+        mask = (torch.rand_like(self.token_ids.float()) < percentage) & (self.maskable == 1)
         
         # Create masked inputs
         masked_inputs = self.token_ids.clone()

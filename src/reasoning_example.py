@@ -106,31 +106,31 @@ class TokenizedExamples:
         batch_size = self.token_ids.size(0)
         results = []
         
-        # Define tag tokens to search for
-        question_tag = "question"
-        reasoning_tag = "reasoning"
-        answer_tag = "answer"
+        # Define tags and their maskability
+        tags = {
+            "question": False,  # question tokens are not maskable
+            "reasoning": True,  # reasoning tokens are maskable
+            "answer": True      # answer tokens are maskable
+        }
         
-        # Get token IDs for tags
-        question_tokens = self.tokenizer.encode(question_tag, add_special_tokens=False)
-        reasoning_tokens = self.tokenizer.encode(reasoning_tag, add_special_tokens=False)
-        answer_tokens = self.tokenizer.encode(answer_tag, add_special_tokens=False)
+        # Create dictionaries to store patterns and positions
+        open_patterns = {}
+        close_patterns = {}
+        open_positions = {}
+        close_positions = {}
         
-        # Create patterns for opening and closing tags
-        q_open_pattern = open_tag(question_tokens)
-        q_close_pattern = close_tag(question_tokens)
-        r_open_pattern = open_tag(reasoning_tokens)
-        r_close_pattern = close_tag(reasoning_tokens)
-        a_open_pattern = open_tag(answer_tokens)
-        a_close_pattern = close_tag(answer_tokens)
-        
-        # Find tag positions in batch
-        q_open_positions = find_sequences_batch(self.token_ids, q_open_pattern)
-        q_close_positions = find_sequences_batch(self.token_ids, q_close_pattern)
-        r_open_positions = find_sequences_batch(self.token_ids, r_open_pattern)
-        r_close_positions = find_sequences_batch(self.token_ids, r_close_pattern)
-        a_open_positions = find_sequences_batch(self.token_ids, a_open_pattern)
-        a_close_positions = find_sequences_batch(self.token_ids, a_close_pattern)
+        # Build patterns and find positions for each tag
+        for tag_name, is_maskable in tags.items():
+            # Get token IDs for the tag
+            tag_tokens = self.tokenizer.encode(tag_name, add_special_tokens=False)
+            
+            # Create patterns
+            open_patterns[tag_name] = open_tag(tag_tokens)
+            close_patterns[tag_name] = close_tag(tag_tokens)
+            
+            # Find positions
+            open_positions[tag_name] = find_sequences_batch(self.token_ids, open_patterns[tag_name])
+            close_positions[tag_name] = find_sequences_batch(self.token_ids, close_patterns[tag_name])
         
         # Special tokens that are never maskable
         special_token_ids = [
@@ -144,24 +144,15 @@ class TokenizedExamples:
             # Start with all tokens not maskable (0)
             maskable = torch.zeros_like(self.token_ids[i], dtype=torch.int)
             
-            # Get section boundaries
-            if len(q_open_positions[i]) > 0 and len(q_close_positions[i]) > 0:
-                q_start = q_open_positions[i][0]
-                q_end = q_close_positions[i][0] + len(q_close_pattern)
-            else:
-                q_start, q_end = 0, 0
-                
-            if len(r_open_positions[i]) > 0 and len(r_close_positions[i]) > 0:
-                r_start = r_open_positions[i][0] + len(r_open_pattern)
-                r_end = r_close_positions[i][0]
-                # Make reasoning tokens maskable (1)
-                maskable[r_start:r_end] = 1
-            
-            if len(a_open_positions[i]) > 0 and len(a_close_positions[i]) > 0:
-                a_start = a_open_positions[i][0] + len(a_open_pattern)
-                a_end = a_close_positions[i][0]
-                # Make answer tokens maskable (1)
-                maskable[a_start:a_end] = 1
+            # Process each tag
+            for tag_name, is_maskable in tags.items():
+                if is_maskable and len(open_positions[tag_name][i]) > 0 and len(close_positions[tag_name][i]) > 0:
+                    # Get the content between opening and closing tags
+                    start = open_positions[tag_name][i][0] + len(open_patterns[tag_name])
+                    end = close_positions[tag_name][i][0]
+                    
+                    # Make these tokens maskable (1)
+                    maskable[start:end] = 1
             
             # Make special tokens not maskable (0)
             for token_id in special_token_ids:

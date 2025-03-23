@@ -8,7 +8,7 @@ from src.reasoning_example import TokenizedExamples
 from src.addition_reasoning_dataset import AdditionReasoningDataset
 
 class TestMaskedDiffusionBERT(unittest.TestCase):
-    def manual_test_overfit_batch(self):
+    def test_overfit_batch(self):
         model = MaskedDiffusionBERT()
         tokenizer = model.tokenizer
         
@@ -26,9 +26,10 @@ class TestMaskedDiffusionBERT(unittest.TestCase):
         trainer.fit(model, dataloader)
         
         batch = next(iter(dataloader))
+        examples = TokenizedExamples.from_tensors(tokenizer=tokenizer, input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
         with torch.no_grad():
-            for updated_ids, _ in model.predict(batch["input_ids"], batch["attention_mask"], batch["input_ids"]):
-                decoded = tokenizer.decode(updated_ids[0], skip_special_tokens=True)
+            for updated_examples, _ in model.predict(examples):
+                decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)
                 print(decoded)
 
 

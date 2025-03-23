@@ -149,3 +149,19 @@ class TestTokenizedExample(unittest.TestCase):
         
         self.assertTrue(torch.all(unmasked.labels[masked.masked] == unmasked.original_ids[masked.masked]))
         self.assertTrue(torch.all(unmasked.labels[~masked.masked] == -100))
+        
+    def test_update(self):
+        example = ReasoningExample(
+            "This is a question",
+            ["This is reasoning"],
+            "This is an answer"
+        )
+        
+        tokenized = TokenizedExamples.create([example], self.tokenizer)
+        masked = tokenized.mask(percentage=1.0)
+        
+        predicted_ids = torch.randint(1000, 5000, (masked.input_ids.shape[0], masked.input_ids.shape[1]))
+        updated = masked.update(predicted_ids)
+        
+        self.assertTrue(torch.all(updated.input_ids[masked.maskable == 1] == predicted_ids.view(-1)[:masked.maskable.sum()]))
+        self.assertTrue(torch.all(updated.input_ids[masked.maskable == 0] == masked.input_ids[masked.maskable == 0]))

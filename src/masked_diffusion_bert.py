@@ -11,6 +11,7 @@ from transformers import (
     AutoModelForMaskedLM,
 )
 from src.reasoning_example import TokenizedExamples
+import math
 
 def sample_logits(logits, temperature=1.0):
     """
@@ -60,7 +61,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
             3. Compute loss only on masked positions
         """
         # 1) Apply noise (randomly mask some tokens)
-        tokenized = TokenizedExamples(self.tokenizer, batch["input_ids"], batch["attention_mask"])
+        tokenized = TokenizedExamples.from_tensors(self.tokenizer, batch["input_ids"], batch["attention_mask"])
         
         # Use a masking probability between 0.2 and 1.0
         mask_prob = 0.2 + 0.8 * torch.rand(1).item()
@@ -70,7 +71,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         # 2) Forward pass
         # Use predict generator for iterative unmasking
         first_logits = None
-        for _, logits in self.predict(masked.input_ids, masked.attention_mask, masked.labels):
+        for _, logits in self.predict(masked, fraction_per_step=0.1, temperature=1.0):
             first_logits = logits
             break
 
@@ -88,71 +89,44 @@ class MaskedDiffusionBERT(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
 
-    def predict(self, input_ids, attention_mask, labels, fraction_per_step=0.1, temperature=1.0):
+    def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0):
         """
-        Iterative unmasking generator: Takes masked input_ids and gradually fills them in.
-        Yields (updated_input_ids, logits) tuples at each step of the unmasking process.
+        Iterative unmasking generator: Takes masked TokenizedExamples and gradually fills them in.
+        Yields (updated_examples, logits) tuples at each step of the unmasking process.
         
         Args:
-            input_ids: Tensor of token IDs, with some positions containing mask tokens
-            attention_mask: Tensor indicating which tokens to attend to (1) vs ignore (0)
+            tokenized_examples: TokenizedExamples instance with masked tokens
             fraction_per_step: Fraction of masked tokens to unmask in each step
             temperature: Controls randomness in token selection (higher = more random)
             
         Yields:
-            tuple: (updated_input_ids, logits)
-                - updated_input_ids: Current state of tokens with some positions unmasked
+            tuple: (updated_examples, logits)
+                - updated_examples: Current state of TokenizedExamples with some positions unmasked
                 - logits: Raw logits from the model for all positions
         """
-        input_ids = input_ids.clone()
+        total_steps = math.ceil(1.5 / fraction_per_step)
+        print(f"Total steps: {total_steps}")
         
-        # Create a mask to track which tokens were originally masked
-        original_mask = (input_ids == self.mask_token_id)
-        
-        # Calculate the number of masked tokens
-        num_masked_tokens = original_mask.sum().item()
-        
-        # Add 50% extra steps for refinement
-        # For 4 tokens: 4 + 4*0.5 = 6 steps total
-        total_steps = max(2, int(num_masked_tokens * 1.5))
-        
-        # Calculate how many tokens to unmask per step (10% of original masked tokens)
-        unmask_per_step = max(1, int(fraction_per_step * num_masked_tokens))
-        
-        # Track which tokens have been unmasked so far
-        unmasked_so_far = torch.zeros_like(original_mask)
+        current_examples = tokenized_examples
         
         for _ in range(total_steps):
-            # Identify which tokens are still masked
-            still_masked = original_mask & (~unmasked_so_far)
-            
-            # Get indices of still masked tokens
-            masked_indices = still_masked.nonzero(as_tuple=False)
-            
-            # Select random subset of masked tokens to reveal (up to unmask_per_step)
-            indices_to_unmask = masked_indices[torch.randperm(masked_indices.size(0))[:min(unmask_per_step, masked_indices.size(0))]]
-            
-            # Get indices of previously unmasked tokens
-            unmasked_indices = (original_mask & unmasked_so_far).nonzero(as_tuple=False)
-            
-            # Combine both sets of indices to update
-            all_indices_to_update = torch.cat([indices_to_unmask, unmasked_indices], dim=0)
+            current_examples = current_examples.unmask(fraction_per_step)
 
             # Forward pass to get logits for current state
-            logits = self.forward(input_ids, attention_mask, labels)
+            logits = self.forward(
+                current_examples.input_ids, 
+                current_examples.attention_mask, 
+                current_examples.labels
+            )
             
             # Apply temperature and sample or take argmax
             predicted_ids = sample_logits(logits, temperature)
             
-            # Update all eligible tokens
-            for (b_idx, t_idx) in all_indices_to_update:
-                input_ids[b_idx, t_idx] = predicted_ids[b_idx, t_idx]
-                # Mark newly unmasked tokens
-                if still_masked[b_idx, t_idx]:
-                    unmasked_so_far[b_idx, t_idx] = True
+            # Update the examples with the predicted IDs
+            current_examples = current_examples.update(predicted_ids)
             
-            # Yield both the updated input_ids and the logits
-            yield input_ids.clone(), logits
+            # Yield both the updated examples and the logits
+            yield current_examples, logits
 
     def unmask(self, input_text, fraction_per_step=0.1, temperature=1.0, max_length=512):
         """
@@ -166,9 +140,10 @@ class MaskedDiffusionBERT(pl.LightningModule):
         attention_mask = tokens['attention_mask']
         
         # Use predict generator for iterative unmasking
-        for updated_ids, _ in self.predict(input_ids, attention_mask, input_ids, fraction_per_step, temperature):
+        tokenized_examples = TokenizedExamples.from_tensors(self.tokenizer, input_ids, attention_mask)
+        for updated_examples, _ in self.predict(tokenized_examples, fraction_per_step, temperature):
             # Yield the decoded text at each step
-            yield self.tokenizer.decode(updated_ids[0], skip_special_tokens=True)
+            yield self.tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)
 
     def generate(self, input_text, fraction_per_step=0.1, temperature=1.0, max_length=512):
         """

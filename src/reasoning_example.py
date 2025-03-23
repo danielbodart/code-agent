@@ -39,12 +39,7 @@ class TokenizedExamples:
     input_ids:torch.Tensor
     attention_mask:torch.Tensor
     labels:torch.Tensor
-    original_ids:torch.Tensor = None
-
-    def __post_init__(self):
-        # If original_ids is not provided, use input_ids as the original
-        if self.original_ids is None:
-            object.__setattr__(self, 'original_ids', self.input_ids.clone())
+    original_ids:torch.Tensor
 
     @classmethod
     def create(cls, examples:List[Iterator[str]], tokenizer:AutoTokenizer, max_length=512):
@@ -67,14 +62,26 @@ class TokenizedExamples:
             return_tensors='pt',
             return_attention_mask=True,
         )
+            
+        return cls.from_tensors(tokenizer, encoded['input_ids'], encoded['attention_mask'])
+
+    @classmethod
+    def from_tensors(cls, tokenizer:AutoTokenizer, input_ids:torch.Tensor, attention_mask:torch.Tensor):
+        """
+        Create a TokenizedExamples instance from a list of examples.
         
-        # Initialize labels with -100 (ignore index for loss calculation)
-        labels = torch.full_like(encoded['input_ids'], -100)
+        Args:
+            tokenizer: HuggingFace tokenizer
+            input_ids: Token IDs
+            attention_mask: Attention mask
+            
+        Returns:
+            A new TokenizedExamples instance
+        """
+        labels = torch.full_like(input_ids, -100)
+        original_ids = input_ids.clone()
         
-        # Original IDs are the same as input_ids at creation time
-        original_ids = encoded['input_ids'].clone()
-        
-        return cls(tokenizer, encoded['input_ids'], encoded['attention_mask'], labels, original_ids)
+        return cls(tokenizer, input_ids, attention_mask, labels, original_ids)
 
     def __str__(self):
         """Return a string representation of all examples in the batch."""
@@ -229,3 +236,23 @@ class TokenizedExamples:
         labels[unmask] = self.original_ids[unmask]
         
         return TokenizedExamples(self.tokenizer, self.input_ids, self.attention_mask, labels, self.original_ids)
+
+    def update(self, predicted_ids):
+        """
+        Updates the maskable tokens with predicted token IDs.
+        
+        Args:
+            predicted_ids: Tensor of token IDs to replace maskable tokens
+            
+        Returns:
+            A new TokenizedExamples instance with updated input_ids
+        """
+        # Create a copy of input_ids to update
+        updated_input_ids = self.input_ids.clone()
+        
+        # Simple update approach
+        mask = self.maskable == 1
+        updated_input_ids[mask] = predicted_ids.view(-1)[:mask.sum()]
+        
+        # Return a new TokenizedExamples instance with updated input_ids
+        return TokenizedExamples(self.tokenizer, updated_input_ids, self.attention_mask, self.labels, self.original_ids)

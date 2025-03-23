@@ -105,7 +105,6 @@ class MaskedDiffusionBERT(pl.LightningModule):
                 - logits: Raw logits from the model for all positions
         """
         total_steps = math.ceil(1.5 / fraction_per_step)
-        print(f"Total steps: {total_steps}")
         
         current_examples = tokenized_examples
         

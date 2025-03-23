@@ -1,8 +1,8 @@
 """
-Tests for the ReasoningExample and TokenizedExample classes.
+Tests for the ReasoningExample and TokenizedExamples classes.
 """
 import unittest
-from src.reasoning_example import ReasoningExample, tokenize
+from src.reasoning_example import ReasoningExample, TokenizedExamples
 import torch
 
 
@@ -47,17 +47,17 @@ class TestTokenizedExample(unittest.TestCase):
             "Answer"
         )
 
-        tokenized = tokenize([example], self.tokenizer)
+        tokenized = TokenizedExamples.create([example], self.tokenizer)
  
 
-        self.assertEqual(tokenized.token_ids[0, :9].tolist(), [self.tokenizer.cls_token_id, *open_tag(self.question), 23433, *close_tag(self.question), self.tokenizer.sep_token_id])
+        self.assertEqual(tokenized.input_ids[0, :9].tolist(), [self.tokenizer.cls_token_id, *open_tag(self.question), 23433, *close_tag(self.question), self.tokenizer.sep_token_id])
         self.assertEqual(tokenized.attention_mask[0, :3].tolist(), [1, 1, 1])
 
-        self.assertEqual(tokenized.token_ids[0, 9:15].tolist(), [*open_tag(self.reasoning), 40722, 272])
+        self.assertEqual(tokenized.input_ids[0, 9:15].tolist(), [*open_tag(self.reasoning), 40722, 272])
         self.assertEqual(tokenized.attention_mask[0, 9:15].tolist(), [1, 1, 1, 1, 1, 1])
 
         # Ignores the padding
-        self.assertEqual(tokenized.token_ids[0, 34:36].tolist(), [self.tokenizer.sep_token_id, self.tokenizer.pad_token_id])
+        self.assertEqual(tokenized.input_ids[0, 34:36].tolist(), [self.tokenizer.sep_token_id, self.tokenizer.pad_token_id])
         self.assertEqual(tokenized.attention_mask[0, 34:36].tolist(), [1, 0])
 
     def test_can_mask_tokens(self):
@@ -67,7 +67,7 @@ class TestTokenizedExample(unittest.TestCase):
             "Should get masked"
         )
 
-        tokenized = tokenize([example], self.tokenizer)
+        tokenized = TokenizedExamples.create([example], self.tokenizer)
 
         masked = next(iter(tokenized.mask(percentage=1)))
 
@@ -85,7 +85,7 @@ class TestTokenizedExample(unittest.TestCase):
             "three"
         )
 
-        tokenized = tokenize([example], self.tokenizer)
+        tokenized = TokenizedExamples.create([example], self.tokenizer)
         
         # Only compare up to the actual length of the example
         actual_length = tokenized.lengths[0].item()
@@ -107,7 +107,7 @@ class TestTokenizedExample(unittest.TestCase):
             "longer answer with more tokens too"
         )
         
-        tokenized = tokenize([example1, example2], self.tokenizer)
+        tokenized = TokenizedExamples.create([example1, example2], self.tokenizer)
         
         lengths = tokenized.lengths
         
@@ -123,10 +123,10 @@ class TestTokenizedExample(unittest.TestCase):
             "This is the answer"
         )
         
-        tokenized = tokenize([example], self.tokenizer)
+        tokenized = TokenizedExamples.create([example], self.tokenizer)
         
         masked = tokenized.mask(percentage=0.5)
-        mask_count = (masked.token_ids == self.tokenizer.mask_token_id).sum().item()
+        mask_count = masked.masked.sum().item()
         
         self.assertGreater(mask_count, 0, "Should mask at least some tokens")
         max_maskable = (tokenized.maskable == 1).sum().item()
@@ -139,13 +139,17 @@ class TestTokenizedExample(unittest.TestCase):
             "This is an answer"
         )
         
-        tokenized = tokenize([example], self.tokenizer)
+        tokenized = TokenizedExamples.create([example], self.tokenizer)
         
-        labels = tokenized.labels
-        maskable = tokenized.maskable
+        # Initially all labels should be -100
+        self.assertTrue(torch.all(tokenized.labels == -100))
         
-        # Check that unmaskable tokens have label -100
-        self.assertTrue(torch.all(labels[maskable == 0] == -100))
+        # After masking, only masked tokens should have their original IDs as labels
+        masked = tokenized.mask(percentage=1.0)  # Mask all maskable tokens
         
-        # Check that maskable tokens have their original token IDs
-        self.assertTrue(torch.all(labels[maskable == 1] == tokenized.token_ids[maskable == 1]))
+        # Check that unmaskable tokens still have label -100
+        self.assertTrue(torch.all(masked.labels[masked.maskable == 0] == -100))
+        
+        # Check that masked tokens have their original token IDs
+        masked_tokens = (masked.input_ids == self.tokenizer.mask_token_id)
+        self.assertTrue(torch.all(masked.labels[masked_tokens] == tokenized.input_ids[masked_tokens]))

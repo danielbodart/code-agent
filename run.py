@@ -73,6 +73,9 @@ def bert(*args):
     check()
     sh.uv('run', 'src/predict_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
 
+def train_bert(*args):
+    check()
+    sh.uv('run', 'src/train_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
 
 def ci():
     build()

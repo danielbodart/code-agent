@@ -10,7 +10,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForMaskedLM,
 )
-
+from src.reasoning_example import TokenizedExamples
 
 def sample_logits(logits, temperature=1.0):
     """
@@ -44,47 +44,51 @@ class MaskedDiffusionBERT(pl.LightningModule):
     def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-5):
         super().__init__()
         self.model = AutoModelForMaskedLM.from_pretrained(model_name)
+        self.model.train()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.mask_token_id = self.tokenizer.mask_token_id
         self.lr = lr
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask, labels):
         """ Forward pass: Takes masked inputs, predicts original tokens. """
-        return self.model(input_ids=input_ids, attention_mask=attention_mask).logits
+        return self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels).logits
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx: int):
         """ Training step: 
             1. Randomly mask tokens
             2. Pass masked sequence through model
             3. Compute loss only on masked positions
         """
-        input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
-        
         # 1) Apply noise (randomly mask some tokens)
-        p = torch.rand(1).item()  # Random mask fraction in [0,1)
-        mask = (torch.rand_like(input_ids.float()) < p) & (input_ids != self.tokenizer.pad_token_id)
-        masked_inputs = input_ids.clone()
-        masked_inputs[mask] = self.mask_token_id  # Replace tokens with [MASK]
-
-        # 2) Get the first logits from the predict generator
+        tokenized = TokenizedExamples(self.tokenizer, batch["input_ids"], batch["attention_mask"])
+        
+        # Use a masking probability between 0.2 and 1.0
+        mask_prob = 0.2 + 0.8 * torch.rand(1).item()
+        
+        masked = tokenized.mask(mask_prob)
+        
+        # 2) Forward pass
+        # Use predict generator for iterative unmasking
         first_logits = None
-        for _, logits in self.predict(masked_inputs, attention_mask, fraction_per_step=0.1):
+        for _, logits in self.predict(masked.input_ids, masked.attention_mask, masked.labels):
             first_logits = logits
-            break  # Only take the first logits
-        
-        # 3) Compute loss only for masked positions using the first logits
+            break
+
+        # 3) Compute loss only for masked positions
+        loss_indices = masked.maskable.view(-1)
         loss = F.cross_entropy(
-            first_logits.view(-1, self.model.config.vocab_size)[mask.view(-1)], 
-            input_ids.view(-1)[mask.view(-1)]
+            first_logits.view(-1, self.model.config.vocab_size)[loss_indices], 
+            masked.input_ids.view(-1)[loss_indices]
         )
-        
+
         self.log("train_loss", loss, prog_bar=True)
         return loss
+        
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
 
-    def predict(self, input_ids, attention_mask, fraction_per_step=0.1, temperature=1.0):
+    def predict(self, input_ids, attention_mask, labels, fraction_per_step=0.1, temperature=1.0):
         """
         Iterative unmasking generator: Takes masked input_ids and gradually fills them in.
         Yields (updated_input_ids, logits) tuples at each step of the unmasking process.
@@ -135,7 +139,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
             all_indices_to_update = torch.cat([indices_to_unmask, unmasked_indices], dim=0)
 
             # Forward pass to get logits for current state
-            logits = self.forward(input_ids, attention_mask)
+            logits = self.forward(input_ids, attention_mask, labels)
             
             # Apply temperature and sample or take argmax
             predicted_ids = sample_logits(logits, temperature)
@@ -162,7 +166,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         attention_mask = tokens['attention_mask']
         
         # Use predict generator for iterative unmasking
-        for updated_ids, _ in self.predict(input_ids, attention_mask, fraction_per_step, temperature):
+        for updated_ids, _ in self.predict(input_ids, attention_mask, input_ids, fraction_per_step, temperature):
             # Yield the decoded text at each step
             yield self.tokenizer.decode(updated_ids[0], skip_special_tokens=True)
 
@@ -176,4 +180,3 @@ class MaskedDiffusionBERT(pl.LightningModule):
         for result in self.unmask(input_text, fraction_per_step, temperature, max_length):
             final_result = result
         return final_result
-

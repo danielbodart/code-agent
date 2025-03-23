@@ -31,36 +31,41 @@ import torch
 from src.tokens import tag_start, tag_end, close_tag_start, find_sequences_batch, open_tag, close_tag
 
 
-def tokenize(examples:List[ReasoningExample], tokenizer:AutoTokenizer, max_length=512):
-    """
-    Tokenize the example using the provided tokenizer.
-    
-    Args:
-        tokenizer: HuggingFace tokenizer
-        return_tensors: Format of tensors to return ('pt', 'tf', 'np', or None for lists)
-        max_length: Maximum sequence length
-        
-    Returns:
-        self (for method chaining)
-    """
-    encoded = tokenizer(
-        text=["[SEP]".join(example) for example in examples],
-        max_length=max_length, 
-        truncation=True, 
-        padding='max_length',
-        return_tensors='pt',
-        return_attention_mask=True,
-    )
-    
-    return TokenizedExamples(tokenizer, encoded['input_ids'], encoded['attention_mask'])
-
 @dataclass(frozen=True)
 class TokenizedExamples:
     """Collection of tokenized examples."""
     
     tokenizer:AutoTokenizer
-    token_ids:torch.Tensor
+    input_ids:torch.Tensor
     attention_mask:torch.Tensor
+    labels:torch.Tensor
+
+    @classmethod
+    def create(cls, examples:List[Iterator[str]], tokenizer:AutoTokenizer, max_length=512):
+        """
+        Create a TokenizedExamples instance from a list of examples.
+        
+        Args:
+            examples: List of examples, where each example is an iterator of strings
+            tokenizer: HuggingFace tokenizer
+            max_length: Maximum sequence length
+            
+        Returns:
+            A new TokenizedExamples instance
+        """
+        encoded = tokenizer(
+            text=["[SEP]".join(example) for example in examples],
+            max_length=max_length, 
+            truncation=True, 
+            padding='max_length',
+            return_tensors='pt',
+            return_attention_mask=True,
+        )
+        
+        # Initialize labels with -100 (ignore index for loss calculation)
+        labels = torch.full_like(encoded['input_ids'], -100)
+        
+        return cls(tokenizer, encoded['input_ids'], encoded['attention_mask'], labels)
 
     def __str__(self):
         """Return a string representation of all examples in the batch."""
@@ -68,13 +73,16 @@ class TokenizedExamples:
 
     def __iter__(self):
         """Iterate over each example in the batch, yielding decoded text."""
-        batch_size = self.token_ids.size(0)
+        batch_size = self.input_ids.size(0)
         for i in range(batch_size):
             # Get actual length of this example
             length = self.lengths[i].item()
             # Only decode up to the actual length
-            example_tokens = self.token_ids[i, :length].tolist()
+            example_tokens = self.input_ids[i, :length].tolist()
             yield self.tokenizer.decode(example_tokens)
+
+    def __getitem__(self, index):
+        return {"input_ids": self.input_ids[index], "attention_mask": self.attention_mask[index], "labels": self.labels[index]}
 
     @cached_property
     def lengths(self):
@@ -85,6 +93,16 @@ class TokenizedExamples:
             torch.Tensor: A 1D tensor containing the length of each example
         """
         return self.attention_mask.sum(dim=1)
+
+    @cached_property
+    def masked(self):
+        """
+        Returns a mask indicating which tokens are masked.
+        
+        Returns:
+            torch.Tensor: A 1D tensor containing the count of masked tokens for each example
+        """
+        return self.input_ids == self.tokenizer.mask_token_id
 
     @cached_property
     def maskable(self):
@@ -101,12 +119,12 @@ class TokenizedExamples:
         - Padding tokens are not maskable (0)
         
         Returns:
-            torch.Tensor: A tensor of the same shape as token_ids, where 1 indicates maskable tokens
+            torch.Tensor: A tensor of the same shape as input_ids, where 1 indicates maskable tokens
         """
-        batch_size = self.token_ids.size(0)
+        batch_size = self.input_ids.size(0)
         
         # Initialize a tensor of zeros (not maskable)
-        maskable_tensor = torch.zeros_like(self.token_ids)
+        maskable_tensor = torch.zeros_like(self.input_ids)
         
         # Define tags and their maskability
         tags = {
@@ -131,8 +149,8 @@ class TokenizedExamples:
             close_patterns[tag_name] = close_tag(tag_tokens)
             
             # Find positions
-            open_positions[tag_name] = find_sequences_batch(self.token_ids, open_patterns[tag_name])
-            close_positions[tag_name] = find_sequences_batch(self.token_ids, close_patterns[tag_name])
+            open_positions[tag_name] = find_sequences_batch(self.input_ids, open_patterns[tag_name])
+            close_positions[tag_name] = find_sequences_batch(self.input_ids, close_patterns[tag_name])
         
         # Special tokens that are never maskable
         special_token_ids = [
@@ -155,7 +173,7 @@ class TokenizedExamples:
             
             # Make special tokens not maskable (0)
             for token_id in special_token_ids:
-                maskable_tensor[i] = maskable_tensor[i] * (self.token_ids[i] != token_id).int()
+                maskable_tensor[i] = maskable_tensor[i] * (self.input_ids[i] != token_id).int()
         
         # Apply attention mask to ensure only tokens with attention are maskable
         maskable_tensor = maskable_tensor * self.attention_mask
@@ -174,21 +192,13 @@ class TokenizedExamples:
             A new TokenizedExamples instance with masked tokens
         """
         # Only consider tokens that are maskable
-        mask = (torch.rand_like(self.token_ids.float()) < percentage) & (self.maskable == 1)
+        mask = (torch.rand_like(self.input_ids.float()) < percentage) & (self.maskable == 1)
         
         # Create masked inputs
-        masked_inputs = self.token_ids.clone()
+        masked_inputs = self.input_ids.clone()
         masked_inputs[mask] = self.tokenizer.mask_token_id
-        
-        return TokenizedExamples(self.tokenizer, masked_inputs, self.attention_mask)
 
-    @property
-    def labels(self):
-        """
-        Returns labels for masked language modeling.
-        - Original token IDs for maskable tokens
-        - -100 for unmaskable tokens (ignored in loss calculation)
-        """
-        labels = self.token_ids.clone()
-        labels[self.maskable == 0] = -100
-        return labels
+        labels = self.labels.clone()
+        labels[mask] = self.input_ids[mask]
+        
+        return TokenizedExamples(self.tokenizer, masked_inputs, self.attention_mask, labels)

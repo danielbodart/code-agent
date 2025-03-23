@@ -31,6 +31,6 @@ test_batch = next(iter(dataloader))
 with torch.no_grad():
     # Create a TokenizedExamples instance directly since we already have tokenized data
     masked = TokenizedExamples.from_tensors(tokenizer, test_batch["input_ids"], test_batch["attention_mask"]).mask(0.2)
-    for i, (updated_ids, _) in enumerate(model.predict(masked)):
-        decoded = tokenizer.decode(updated_ids[0], skip_special_tokens=True)
+    for i, (updated_examples, _) in enumerate(model.predict(masked)):
+        decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)
         print(f"Example {i+1}:\n{decoded}\n")

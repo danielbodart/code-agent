@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from lightning_fabric.utilities.seed import seed_everything
@@ -12,6 +11,7 @@ from transformers import (
 )
 from src.reasoning_example import TokenizedExamples
 import math
+from typing import Iterator, Tuple, Any
 
 def sample_logits(logits, temperature=1.0):
     """
@@ -74,7 +74,9 @@ class MaskedDiffusionBERT(pl.LightningModule):
         for _, logits in self.predict(masked, fraction_per_step=0.1, temperature=1.0):
             first_logits = logits
             break
-
+        
+        assert first_logits is not None, "first_logits should not be None"
+        
         # 3) Compute loss only for masked positions
         loss_indices = masked.maskable.view(-1)
         loss = F.cross_entropy(
@@ -89,7 +91,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
 
-    def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0):
+    def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0) -> Iterator[Tuple[TokenizedExamples, torch.Tensor]]:
         """
         Iterative unmasking generator: Takes masked TokenizedExamples and gradually fills them in.
         Yields (updated_examples, logits) tuples at each step of the unmasking process.
@@ -105,6 +107,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
                 - logits: Raw logits from the model for all positions
         """
         total_steps = math.ceil(1.5 / fraction_per_step)
+        total_steps = max(1, total_steps)  # Ensure at least one step
         
         current_examples = tokenized_examples
         

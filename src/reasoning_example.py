@@ -39,6 +39,12 @@ class TokenizedExamples:
     input_ids:torch.Tensor
     attention_mask:torch.Tensor
     labels:torch.Tensor
+    original_ids:torch.Tensor = None
+
+    def __post_init__(self):
+        # If original_ids is not provided, use input_ids as the original
+        if self.original_ids is None:
+            object.__setattr__(self, 'original_ids', self.input_ids.clone())
 
     @classmethod
     def create(cls, examples:List[Iterator[str]], tokenizer:AutoTokenizer, max_length=512):
@@ -65,7 +71,10 @@ class TokenizedExamples:
         # Initialize labels with -100 (ignore index for loss calculation)
         labels = torch.full_like(encoded['input_ids'], -100)
         
-        return cls(tokenizer, encoded['input_ids'], encoded['attention_mask'], labels)
+        # Original IDs are the same as input_ids at creation time
+        original_ids = encoded['input_ids'].clone()
+        
+        return cls(tokenizer, encoded['input_ids'], encoded['attention_mask'], labels, original_ids)
 
     def __str__(self):
         """Return a string representation of all examples in the batch."""
@@ -184,6 +193,7 @@ class TokenizedExamples:
         """
         Masks a percentage of the tokens in the collection. 
         Only masks tokens that are marked as maskable.
+        Does not modify labels.
         
         Args:
             percentage: Percentage of maskable tokens to mask (0.0 to 1.0)
@@ -198,7 +208,24 @@ class TokenizedExamples:
         masked_inputs = self.input_ids.clone()
         masked_inputs[mask] = self.tokenizer.mask_token_id
 
-        labels = self.labels.clone()
-        labels[mask] = self.input_ids[mask]
+        return TokenizedExamples(self.tokenizer, masked_inputs, self.attention_mask, self.labels, self.original_ids)
         
-        return TokenizedExamples(self.tokenizer, masked_inputs, self.attention_mask, labels)
+    def unmask(self, percentage: float):
+        """
+        Sets labels for a percentage of masked tokens to their original values.
+        This allows the model to learn to predict these tokens.
+        Only operates on tokens that are currently masked.
+        
+        Args:
+            percentage: Percentage of masked tokens to unmask (0.0 to 1.0)
+        
+        Returns:
+            A new TokenizedExamples instance with updated labels
+        """
+        # Only unmask a percentage of the masked tokens
+        unmask = (torch.rand_like(self.input_ids.float()) < percentage) & self.masked
+        
+        labels = self.labels.clone()
+        labels[unmask] = self.original_ids[unmask]
+        
+        return TokenizedExamples(self.tokenizer, self.input_ids, self.attention_mask, labels, self.original_ids)

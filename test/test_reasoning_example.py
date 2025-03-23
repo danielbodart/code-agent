@@ -131,8 +131,9 @@ class TestTokenizedExample(unittest.TestCase):
         self.assertGreater(mask_count, 0, "Should mask at least some tokens")
         max_maskable = (tokenized.maskable == 1).sum().item()
         self.assertLess(mask_count, max_maskable, "Should not mask 100% of maskable tokens")
-        
-    def test_labels(self):
+    
+
+    def test_unmask(self):
         example = ReasoningExample(
             "This is a question",
             ["This is reasoning"],
@@ -140,16 +141,11 @@ class TestTokenizedExample(unittest.TestCase):
         )
         
         tokenized = TokenizedExamples.create([example], self.tokenizer)
+        masked = tokenized.mask(percentage=1.0)
         
-        # Initially all labels should be -100
-        self.assertTrue(torch.all(tokenized.labels == -100))
+        self.assertTrue(torch.all(masked.labels == -100))
         
-        # After masking, only masked tokens should have their original IDs as labels
-        masked = tokenized.mask(percentage=1.0)  # Mask all maskable tokens
+        unmasked = masked.unmask(percentage=1.0)
         
-        # Check that unmaskable tokens still have label -100
-        self.assertTrue(torch.all(masked.labels[masked.maskable == 0] == -100))
-        
-        # Check that masked tokens have their original token IDs
-        masked_tokens = (masked.input_ids == self.tokenizer.mask_token_id)
-        self.assertTrue(torch.all(masked.labels[masked_tokens] == tokenized.input_ids[masked_tokens]))
+        self.assertTrue(torch.all(unmasked.labels[masked.masked] == unmasked.original_ids[masked.masked]))
+        self.assertTrue(torch.all(unmasked.labels[~masked.masked] == -100))

@@ -6,11 +6,14 @@ from pytorch_lightning import Trainer
 from masked_diffusion_bert import MaskedDiffusionBERT
 from addition_reasoning_dataset import AdditionReasoningDataset
 from reasoning_example import TokenizedExamples
+from pytorch_lightning import seed_everything
+
+seed_everything(42)
 
 model = MaskedDiffusionBERT()
 tokenizer = model.tokenizer
 
-dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100, r=random)
+dataset = AdditionReasoningDataset(tokenizer, num_examples=10000, max_number=1000)
 
 dataloader = DataLoader(
     dataset, 
@@ -20,7 +23,7 @@ dataloader = DataLoader(
     pin_memory=True
 )
 
-trainer = Trainer( max_epochs=5, default_root_dir="checkpoints", accumulate_grad_batches=4, precision="bf16-mixed" )
+trainer = Trainer( max_epochs=6, default_root_dir="checkpoints", accumulate_grad_batches=8, precision="bf16-mixed" )
 
 print("Starting training...")
 trainer.fit(model, dataloader)

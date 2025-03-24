@@ -1,26 +1,29 @@
 import unittest
 import torch
-import random
 from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
 from src.masked_diffusion_bert import MaskedDiffusionBERT
 from src.reasoning_example import TokenizedExamples
 from src.addition_reasoning_dataset import AdditionReasoningDataset
+from pytorch_lightning import seed_everything
+
 
 class TestMaskedDiffusionBERT(unittest.TestCase):
     def test_overfit_batch(self):
+        seed_everything(42)
+
         model = MaskedDiffusionBERT()
         tokenizer = model.tokenizer
         
-        r = random.Random(42)
-        dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100, r=r)
-        dataloader = DataLoader(dataset, batch_size=4)
+        dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100)
+        dataloader = DataLoader(dataset, batch_size=2)
         
         trainer = Trainer(
             fast_dev_run=True,
             overfit_batches=1,
-            accumulate_grad_batches=4, 
-            precision="bf16-mixed" 
+            accumulate_grad_batches=8, 
+            precision="bf16-mixed",
+            pin_memory=True
         )
         
         trainer.fit(model, dataloader)

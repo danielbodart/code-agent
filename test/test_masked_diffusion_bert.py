@@ -16,14 +16,13 @@ class TestMaskedDiffusionBERT(unittest.TestCase):
         tokenizer = model.tokenizer
         
         dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100)
-        dataloader = DataLoader(dataset, batch_size=2)
+        dataloader = DataLoader(dataset, batch_size=2, pin_memory=True)
         
         trainer = Trainer(
             fast_dev_run=True,
             overfit_batches=1,
             accumulate_grad_batches=8, 
             precision="bf16-mixed",
-            pin_memory=True
         )
         
         trainer.fit(model, dataloader)

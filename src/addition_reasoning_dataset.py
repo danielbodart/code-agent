@@ -2,7 +2,8 @@ from torch.utils.data import Dataset
 from functools import lru_cache
 import random
 from src.data_generator import generate_addition_example
-from src.reasoning_example import TokenizedExamples
+from src.bert_diffuser import BERTDiffuser
+
 
 class AdditionReasoningDataset(Dataset):
     def __init__(self, tokenizer, num_examples=10000, max_number=1000):
@@ -16,4 +17,4 @@ class AdditionReasoningDataset(Dataset):
     @lru_cache(maxsize=128)
     def __getitem__(self, idx):
         example = generate_addition_example( r=random.Random(idx), max_number=self.max_number )
-        return TokenizedExamples.create([example], self.tokenizer)[0]
+        return BERTDiffuser.create([example], self.tokenizer)[0]

@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
 from masked_diffusion_bert import MaskedDiffusionBERT
 from addition_reasoning_dataset import AdditionReasoningDataset
-from reasoning_example import TokenizedExamples
+from src.bert_diffuser import BERTDiffuser
 from pytorch_lightning import seed_everything
 
 seed_everything(42)
@@ -33,7 +33,7 @@ print("\nTesting model on a few examples:")
 test_batch = next(iter(dataloader))
 with torch.no_grad():
     # Create a TokenizedExamples instance directly since we already have tokenized data
-    masked = TokenizedExamples.from_tensors(tokenizer, test_batch["input_ids"], test_batch["attention_mask"]).mask(0.2)
+    masked = BERTDiffuser.from_tensors(tokenizer, test_batch["input_ids"], test_batch["attention_mask"]).mask(0.2)
     for i, (updated_examples, _) in enumerate(model.predict(masked)):
         decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)
         print(f"Example {i+1}:\n{decoded}\n")

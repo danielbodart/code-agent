@@ -9,7 +9,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForMaskedLM,
 )
-from src.reasoning_example import TokenizedExamples
+from src.bert_diffuser import BERTDiffuser
 import math
 from typing import Iterator, Tuple, Any
 
@@ -61,7 +61,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
             3. Compute loss only on masked positions
         """
         # 1) Apply noise (randomly mask some tokens)
-        tokenized = TokenizedExamples.from_tensors(self.tokenizer, batch["input_ids"], batch["attention_mask"])
+        tokenized = BERTDiffuser.from_tensors(self.tokenizer, batch["input_ids"], batch["attention_mask"])
         
         # Use a masking probability between 0.2 and 1.0
         mask_prob = 0.2 + 0.8 * torch.rand(1).item()
@@ -91,7 +91,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
 
-    def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0) -> Iterator[Tuple[TokenizedExamples, torch.Tensor]]:
+    def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0) -> Iterator[Tuple[BERTDiffuser, torch.Tensor]]:
         """
         Iterative unmasking generator: Takes masked TokenizedExamples and gradually fills them in.
         Yields (updated_examples, logits) tuples at each step of the unmasking process.
@@ -142,7 +142,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         attention_mask = tokens['attention_mask']
         
         # Use predict generator for iterative unmasking
-        tokenized_examples = TokenizedExamples.from_tensors(self.tokenizer, input_ids, attention_mask)
+        tokenized_examples = BERTDiffuser.from_tensors(self.tokenizer, input_ids, attention_mask)
         for updated_examples, _ in self.predict(tokenized_examples, fraction_per_step, temperature):
             # Yield the decoded text at each step
             yield self.tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)

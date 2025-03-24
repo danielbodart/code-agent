@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
 from src.masked_diffusion_bert import MaskedDiffusionBERT
-from src.reasoning_example import TokenizedExamples
+from src.bert_diffuser import BERTDiffuser
 from src.addition_reasoning_dataset import AdditionReasoningDataset
 from pytorch_lightning import seed_everything
 
@@ -28,7 +28,7 @@ class TestMaskedDiffusionBERT(unittest.TestCase):
         trainer.fit(model, dataloader)
         
         batch = next(iter(dataloader))
-        examples = TokenizedExamples.from_tensors(tokenizer=tokenizer, input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
+        examples = BERTDiffuser.from_tensors(tokenizer=tokenizer, input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
         with torch.no_grad():
             for updated_examples, _ in model.predict(examples):
                 decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)

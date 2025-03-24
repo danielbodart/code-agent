@@ -1,6 +1,3 @@
-"""
-Tests for the ReasoningExample and TokenizedExamples classes.
-"""
 import unittest
 from src.reasoning_example import ReasoningExample
 

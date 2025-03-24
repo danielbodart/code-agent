@@ -21,7 +21,7 @@ class BERTDiffuser:
     @classmethod
     def create(cls, examples:List[Iterator[str]], tokenizer:AutoTokenizer, max_length=512):
         """
-        Create a TokenizedExamples instance from a list of examples.
+        Create a BERTDiffuser instance from a list of examples.
 
         Args:
             examples: List of examples, where each example is an iterator of strings
@@ -45,7 +45,7 @@ class BERTDiffuser:
     @classmethod
     def from_tensors(cls, tokenizer:AutoTokenizer, input_ids:torch.Tensor, attention_mask:torch.Tensor):
         """
-        Create a TokenizedExamples instance from a list of examples.
+        Create a BERTDiffuser instance from a list of examples.
 
         Args:
             tokenizer: HuggingFace tokenizer
@@ -231,5 +231,5 @@ class BERTDiffuser:
         mask = self.maskable == 1
         updated_input_ids[mask] = predicted_ids.view(-1)[:mask.sum()]
 
-        # Return a new TokenizedExamples instance with updated input_ids
+        # Return a new BERTDiffuser instance with updated input_ids
         return BERTDiffuser(self.tokenizer, updated_input_ids, self.attention_mask, self.labels, self.original_ids)

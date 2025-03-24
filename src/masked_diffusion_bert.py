@@ -93,17 +93,17 @@ class MaskedDiffusionBERT(pl.LightningModule):
 
     def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0) -> Iterator[Tuple[BERTDiffuser, torch.Tensor]]:
         """
-        Iterative unmasking generator: Takes masked TokenizedExamples and gradually fills them in.
+        Iterative unmasking generator: Takes masked BERTDiffuser and gradually fills them in.
         Yields (updated_examples, logits) tuples at each step of the unmasking process.
         
         Args:
-            tokenized_examples: TokenizedExamples instance with masked tokens
+            tokenized_examples: BERTDiffuser instance with masked tokens
             fraction_per_step: Fraction of masked tokens to unmask in each step
             temperature: Controls randomness in token selection (higher = more random)
             
         Yields:
             tuple: (updated_examples, logits)
-                - updated_examples: Current state of TokenizedExamples with some positions unmasked
+                - updated_examples: Current state of BERTDiffuser with some positions unmasked
                 - logits: Raw logits from the model for all positions
         """
         total_steps = math.ceil(1.5 / fraction_per_step)

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from typing import List, Iterator
 
@@ -15,7 +15,6 @@ class BERTDiffuser:
     tokenizer:AutoTokenizer
     input_ids:torch.Tensor
     attention_mask:torch.Tensor
-    labels:torch.Tensor
     original_ids:torch.Tensor
 
     @classmethod
@@ -55,10 +54,8 @@ class BERTDiffuser:
         Returns:
             A new BERTDiffuser instance
         """
-        labels = torch.full_like(input_ids, -100)
-        original_ids = input_ids.clone()
+        return cls(tokenizer, input_ids, attention_mask, input_ids.clone())
 
-        return cls(tokenizer, input_ids, attention_mask, labels, original_ids)
 
     def __str__(self):
         """Return a string representation of all examples in the batch."""
@@ -76,6 +73,16 @@ class BERTDiffuser:
 
     def __getitem__(self, index):
         return {"input_ids": self.input_ids[index], "attention_mask": self.attention_mask[index], "labels": self.labels[index]}
+
+    @cached_property
+    def labels(self):
+        """
+        All input_ids that are not [MASK] will be -100, otherwise will be the original token ID
+
+        Returns:
+            torch.Tensor: A 2D tensor containing the original token IDs for each example
+        """
+        return torch.where(self.input_ids == self.tokenizer.mask_token_id, self.input_ids, -100)
 
     @cached_property
     def lengths(self):
@@ -123,7 +130,6 @@ class BERTDiffuser:
         """
         Masks a percentage of the tokens in the collection.
         Only masks tokens that are marked as maskable.
-        Does not modify labels.
 
         Args:
             percentage: Percentage of maskable tokens to mask (0.0 to 1.0)
@@ -138,34 +144,16 @@ class BERTDiffuser:
         masked_inputs = self.input_ids.clone()
         masked_inputs[mask] = self.tokenizer.mask_token_id
 
-        return BERTDiffuser(self.tokenizer, masked_inputs, self.attention_mask, self.labels, self.original_ids)
+        return BERTDiffuser(self.tokenizer, masked_inputs, self.attention_mask, self.original_ids)
 
-    def unmask(self, percentage: float):
+    def update(self, predicted_ids, update_mask=None):
         """
-        Sets labels for a percentage of masked tokens to their original values.
-        This allows the model to learn to predict these tokens.
-        Only operates on tokens that are currently masked.
+        Updates tokens with predicted token IDs based on an optional update mask.
 
         Args:
-            percentage: Percentage of masked tokens to unmask (0.0 to 1.0)
-
-        Returns:
-            A new BERTDiffuser instance with updated labels
-        """
-        # Only unmask a percentage of the masked tokens
-        unmask = (torch.rand_like(self.input_ids.float()) < percentage) & self.masked
-
-        labels = self.labels.clone()
-        labels[unmask] = self.input_ids[unmask]
-
-        return BERTDiffuser(self.tokenizer, self.input_ids, self.attention_mask, labels, self.original_ids)
-
-    def update(self, predicted_ids):
-        """
-        Updates the maskable tokens with predicted token IDs.
-
-        Args:
-            predicted_ids: Tensor of token IDs to replace maskable tokens
+            predicted_ids: Tensor of token IDs to replace tokens
+            update_mask: Optional boolean mask indicating which positions to update.
+                        If None, defaults to self.maskable
 
         Returns:
             A new BERTDiffuser instance with updated input_ids
@@ -173,9 +161,11 @@ class BERTDiffuser:
         # Create a copy of input_ids to update
         updated_input_ids = self.input_ids.clone()
 
-        # Simple update approach
-        mask = self.maskable == 1
-        updated_input_ids[mask] = predicted_ids.view(-1)[:mask.sum()]
+        # Use provided update_mask or default to maskable
+        mask = update_mask if update_mask is not None else (self.maskable == 1)
+        
+        # Update only the positions specified by the mask
+        updated_input_ids[mask] = predicted_ids[mask]
 
         # Return a new BERTDiffuser instance with updated input_ids
-        return BERTDiffuser(self.tokenizer, updated_input_ids, self.attention_mask, self.labels, self.original_ids)
+        return BERTDiffuser(self.tokenizer, updated_input_ids, self.attention_mask, self.original_ids)

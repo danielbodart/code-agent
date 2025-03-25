@@ -9,7 +9,7 @@ from pytorch_lightning import seed_everything
 
 
 class TestMaskedDiffusionBERT(unittest.TestCase):
-    def manual_test_overfit_batch(self):
+    def test_overfit_batch(self):
         seed_everything(42)
 
         model = MaskedDiffusionBERT()
@@ -27,12 +27,8 @@ class TestMaskedDiffusionBERT(unittest.TestCase):
         
         trainer.fit(model, dataloader)
         
-        batch = next(iter(dataloader))
-        examples = BERTDiffuser.from_tensors(tokenizer=tokenizer, input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
         with torch.no_grad():
-            for updated_examples in model.predict(examples):
-                decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=False)
-                print(decoded)
+            print(model.generate("<question>What is 2 + 2?</question><answer>[MASK]</answer>"))
 
 
 if __name__ == '__main__':

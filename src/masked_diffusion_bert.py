@@ -42,8 +42,11 @@ def calculate_update_mask(state: BERTDiffuser, logits: torch.Tensor, to_unmask: 
     # Find the positions with highest confidence
     _, top_positions = torch.topk(confidence, to_unmask)
     
-    # Create and return a mask for positions to update
-    return torch.zeros_like(state.masked).index_fill_(0, top_positions, 1)    
+    # Create a mask for positions to update
+    update_mask = torch.zeros_like(state.masked)
+    update_mask.scatter_(1, top_positions, 1)
+    
+    return update_mask
 
 ###############################
 # 2) LightningModule
@@ -78,7 +81,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         logits = self.forward(masked)
         
         # 3) Compute loss only for masked tokens
-        loss_indices = masked.masked
+        loss_indices = masked.masked.view(-1)  # Flatten the mask to match flattened logits
         loss = F.cross_entropy(
             logits.view(-1, self.model.config.vocab_size)[loss_indices], 
             masked.original_ids.view(-1)[loss_indices]

@@ -34,23 +34,15 @@ def build():
     test()
 
 
-def train_diffusion(*args):
-    check()
-    sh.uv('run', 'src/train_diffusion.py', *args, _out=sys.stdout, _err=sys.stderr)
-
-
-def predict_diffusion(*args):
-    check()
-    sh.uv('run', 'src/predict_diffusion.py', *args, _out=sys.stdout, _err=sys.stderr)
-
-
-def predict_bert(*args):
+def predict(*args):
     check()
     sh.uv('run', 'src/predict_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
 
-def train_bert(*args):
+
+def train(*args):
     check()
     sh.uv('run', 'src/train_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
+
 
 def ci():
     build()

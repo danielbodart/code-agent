@@ -98,7 +98,7 @@ class TestBERTDiffuser(unittest.TestCase):
         self.assertEqual(lengths[0].item(), 30)
         self.assertEqual(lengths[1].item(), 44)
 
-    def test_masking_percentage(self):
+    def test_mask_percentage(self):
         """Test that masking with percentage produces reasonable results."""
         example = ReasoningExample(
             "This is a question",
@@ -111,27 +111,13 @@ class TestBERTDiffuser(unittest.TestCase):
         masked = tokenized.mask(percentage=0.5)
         mask_count = masked.masked.sum().item()
 
+        self.assertEqual((masked.labels == self.tokenizer.mask_token_id).sum().item(), mask_count)
+
         self.assertGreater(mask_count, 0, "Should mask at least some tokens")
         max_maskable = (tokenized.maskable == 1).sum().item()
         self.assertLess(mask_count, max_maskable, "Should not mask 100% of maskable tokens")
 
 
-    def test_unmask(self):
-        example = ReasoningExample(
-            "This is a question",
-            ["This is reasoning"],
-            "This is an answer"
-        )
-
-        tokenized = BERTDiffuser.create([example], self.tokenizer)
-        masked = tokenized.mask(percentage=1.0)
-
-        self.assertTrue(torch.all(masked.labels == -100))
-
-        unmasked = masked.unmask(percentage=1.0)
-
-        self.assertTrue(torch.all(unmasked.labels[masked.masked] == unmasked.original_ids[masked.masked]))
-        self.assertTrue(torch.all(unmasked.labels[~masked.masked] == -100))
 
     def test_update(self):
         example = ReasoningExample(

@@ -4,6 +4,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from lightning_fabric.utilities.seed import seed_everything
 from datasets import load_dataset
+from typing import Iterator
 
 from transformers import (
     AutoTokenizer,

@@ -67,7 +67,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         masked = tokenized.mask(mask_prob)
         
         # 2) Forward pass
-        unmasked = masked.unmask(0.1)
+        unmasked = masked.unmask(1)
         logits = self.forward(unmasked.input_ids, unmasked.attention_mask, unmasked.labels)
         
         # 3) Compute loss only for unmasked labels that are not -100
@@ -84,7 +84,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
 
-    def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0) -> Iterator[Tuple[BERTDiffuser, torch.Tensor]]:
+    def predict(self, tokenized_examples, fraction_per_step=0.1, temperature=1.0) -> Iterator[torch.Tensor]:
         """
         Iterative unmasking generator: Takes masked BERTDiffuser and gradually fills them in.
         Yields (updated_examples, logits) tuples at each step of the unmasking process.
@@ -100,12 +100,12 @@ class MaskedDiffusionBERT(pl.LightningModule):
                 - logits: Raw logits from the model for all positions
         """
         total_steps = math.ceil(1.5 / fraction_per_step)
-        total_steps = max(1, total_steps)  # Ensure at least one step
+        total_steps = max(1, total_steps)  # Ensure at least 1 step
         
         current_examples = tokenized_examples
         
         for _ in range(total_steps):
-            current_examples = current_examples.unmask(fraction_per_step)
+            current_examples = current_examples.unmask(1) #fraction_per_step
 
             # Forward pass to get logits for current state
             logits = self.forward(
@@ -121,31 +121,25 @@ class MaskedDiffusionBERT(pl.LightningModule):
             current_examples = current_examples.update(predicted_ids)
             
             # Yield both the updated examples and the logits
-            yield current_examples, logits
+            yield current_examples
+
 
     def unmask(self, input_text, fraction_per_step=0.1, temperature=1.0, max_length=512):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Yields intermediate steps as an iterator.
         """
-        tokens = self.tokenizer(
-            input_text, return_tensors='pt', max_length=max_length, truncation=True, padding='max_length'
-        )
-        input_ids = tokens['input_ids'].clone()
-        attention_mask = tokens['attention_mask']
-        
-        # Use predict generator for iterative unmasking
-        tokenized_examples = BERTDiffuser.from_tensors(self.tokenizer, input_ids, attention_mask)
-        for updated_examples, _ in self.predict(tokenized_examples, fraction_per_step, temperature):
+        tokenized_examples = BERTDiffuser.create([input_text], self.tokenizer, max_length)
+        for updated_examples in self.predict(tokenized_examples, fraction_per_step, temperature):
             # Yield the decoded text at each step
             yield self.tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)
+
 
     def generate(self, input_text, fraction_per_step=0.1, temperature=1.0, max_length=512):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Returns only the final result.
         """
-        # Use the unmask generator but only return the last item
         final_result = None
         for result in self.unmask(input_text, fraction_per_step, temperature, max_length):
             final_result = result

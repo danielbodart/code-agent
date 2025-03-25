@@ -30,8 +30,8 @@ class TestMaskedDiffusionBERT(unittest.TestCase):
         batch = next(iter(dataloader))
         examples = BERTDiffuser.from_tensors(tokenizer=tokenizer, input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
         with torch.no_grad():
-            for updated_examples, _ in model.predict(examples):
-                decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)
+            for updated_examples in model.predict(examples):
+                decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=False)
                 print(decoded)
 
 

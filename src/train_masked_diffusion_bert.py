@@ -33,7 +33,7 @@ print("\nTesting model on a few examples:")
 test_batch = next(iter(dataloader))
 with torch.no_grad():
     # Create a BERTDiffuser instance directly since we already have tokenized data
-    masked = BERTDiffuser.from_tensors(tokenizer, test_batch["input_ids"], test_batch["attention_mask"]).mask(0.2)
-    for i, (updated_examples, _) in enumerate(model.predict(masked)):
-        decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=True)
+    masked = BERTDiffuser.from_tensors(tokenizer, test_batch["input_ids"], test_batch["attention_mask"]).mask(0.1)
+    for i, (updated_examples) in enumerate(model.predict(masked)):
+        decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=False)
         print(f"Example {i+1}:\n{decoded}\n")

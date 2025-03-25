@@ -14,9 +14,10 @@ export -f curl
 function uv() {
   unset -f uv
   if [[ ! -f "$HOME/.local/bin/uv" ]]; then
-    echo "* Downloading and installing mise..."
+    echo "* Downloading and installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
   fi
+  export PATH="$PATH:$HOME/.local/bin" 
   uv "$@"
 }
 export -f uv

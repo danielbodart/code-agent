@@ -1,65 +1,28 @@
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
-from pytorch_lightning import Trainer
-from lightning_fabric.utilities.seed import seed_everything
-from datasets import load_dataset
 from typing import Iterator
+from transformers import AutoTokenizer
+from src.token_schedule import calculate_tokens_per_step
+from src.update_mask import calculate_update_mask, gumbel_max_sampling
 
 from transformers import (
-    AutoTokenizer,
     AutoModelForMaskedLM,
 )
 from src.bert_diffuser import BERTDiffuser
 
-def gumbel_max_sampling(logits):
-    """Gumbel-max sampling for categorical distribution"""
-    gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits) + 1e-10) + 1e-10)
-    return (logits + gumbel_noise).argmax(dim=-1)
-
-
-def calculate_update_mask(state: BERTDiffuser, logits: torch.Tensor, to_unmask: int) -> torch.Tensor:
-    """
-    Calculate which positions to update based on model confidence.
-    
-    Args:
-        state: Current BERTDiffuser state
-        logits: Model logits
-        to_unmask: Number of positions to unmask
-        
-    Returns:
-        Boolean mask indicating which positions to update
-    """
-    # Convert to probabilities
-    probs = F.softmax(logits, dim=-1)
-    
-    # Calculate confidence for each position (max probability)
-    confidence = probs.max(dim=-1).values
-    
-    # Zero out confidence for already unmasked positions
-    confidence = confidence * state.masked
-    
-    # Find the positions with highest confidence
-    _, top_positions = torch.topk(confidence, to_unmask)
-    
-    # Create a mask for positions to update
-    update_mask = torch.zeros_like(state.masked)
-    update_mask.scatter_(1, top_positions, 1)
-    
-    return update_mask
 
 ###############################
 # 2) LightningModule
 ###############################
 class MaskedDiffusionBERT(pl.LightningModule):
-    def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-5, predict_steps=15):
+    def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-5):
         super().__init__()
         self.model = AutoModelForMaskedLM.from_pretrained(model_name)
         self.model.train()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.mask_token_id = self.tokenizer.mask_token_id
         self.lr = lr
-        self.predict_steps = predict_steps
 
     def forward(self, state: BERTDiffuser):
         return self.model(input_ids=state.input_ids, attention_mask=state.attention_mask, labels=state.labels).logits
@@ -91,30 +54,6 @@ class MaskedDiffusionBERT(pl.LightningModule):
         return loss
         
 
-    def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=self.lr)
-
-    def predict(self, state: BERTDiffuser) -> Iterator[BERTDiffuser]:
-        """
-        Iterative unmasking generator: Takes masked BERTDiffuser and gradually fills them in.
-        Yields BERTDiffuser instances at each step of the unmasking process.
-        
-        Args:
-            tokenized_examples: BERTDiffuser instance with masked tokens
-        Yields:
-            BERTDiffuser: Current state of BERTDiffuser with some positions unmasked
-        """
-        current_examples = state
-        
-        for step in range(self.predict_steps):
-            # Calculate how many tokens to unmask in this step
-            remaining_masks = current_examples.masked.sum().item()
-            to_unmask = max(1, int(0.1 * remaining_masks))  # Unmask 10% of remaining masks, at least 1
-            
-            current_examples = self.predict_step(current_examples, to_unmask)
-            yield current_examples
-
-
     def predict_step(self, state, to_unmask):
         """
         Performs one step of the prediction process, unmasking the most confident positions.
@@ -138,6 +77,25 @@ class MaskedDiffusionBERT(pl.LightningModule):
         # Update state with new tokens using the update mask
         return state.update(sampled_tokens, update_mask)
 
+
+    def predict(self, state: BERTDiffuser) -> Iterator[BERTDiffuser]:
+        """
+        Iterative unmasking generator: Takes masked BERTDiffuser and gradually fills them in.
+        Yields BERTDiffuser instances at each step of the unmasking process.
+        
+        Args:
+            tokenized_examples: BERTDiffuser instance with masked tokens
+        Yields:
+            BERTDiffuser: Current state of BERTDiffuser with some positions unmasked
+        """
+        current_examples = state
+        number_of_masks = current_examples.masked.sum().item()
+        
+        for to_unmask in calculate_tokens_per_step(number_of_masks):
+            current_examples = self.predict_step(current_examples, to_unmask)
+            yield current_examples
+
+
     def unmask(self, input_text, max_length=512):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
@@ -158,3 +116,6 @@ class MaskedDiffusionBERT(pl.LightningModule):
         for result in self.unmask(input_text, max_length):
             final_result = result
         return final_result
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr)

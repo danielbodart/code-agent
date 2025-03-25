@@ -51,7 +51,6 @@ class MaskedDiffusionBERT(pl.LightningModule):
         self.lr = lr
 
     def forward(self, input_ids, attention_mask, labels):
-        """ Forward pass: Takes masked inputs, predicts original tokens. """
         return self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels).logits
 
     def training_step(self, batch, batch_idx: int):
@@ -63,25 +62,19 @@ class MaskedDiffusionBERT(pl.LightningModule):
         # 1) Apply noise (randomly mask some tokens)
         tokenized = BERTDiffuser.from_tensors(self.tokenizer, batch["input_ids"], batch["attention_mask"])
         
-        # Use a masking probability between 0.2 and 1.0
-        mask_prob = 0.2 + 0.8 * torch.rand(1).item()
-        
+        # Use a masking probability between 0 and 1.0
+        mask_prob = torch.rand(1).item()
         masked = tokenized.mask(mask_prob)
         
         # 2) Forward pass
-        # Use predict generator for iterative unmasking
-        first_logits = None
-        for _, logits in self.predict(masked, fraction_per_step=0.1, temperature=1.0):
-            first_logits = logits
-            break
+        unmasked = masked.unmask(0.1)
+        logits = self.forward(unmasked.input_ids, unmasked.attention_mask, unmasked.labels)
         
-        assert first_logits is not None, "first_logits should not be None"
-        
-        # 3) Compute loss only for masked positions
-        loss_indices = masked.maskable.view(-1)
+        # 3) Compute loss only for unmasked labels that are not -100
+        loss_indices = unmasked.labels != -100
         loss = F.cross_entropy(
-            first_logits.view(-1, self.model.config.vocab_size)[loss_indices], 
-            masked.input_ids.view(-1)[loss_indices]
+            logits.view(-1, self.model.config.vocab_size)[loss_indices], 
+            unmasked.original_ids.view(-1)[loss_indices]
         )
 
         self.log("train_loss", loss, prog_bar=True)

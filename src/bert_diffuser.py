@@ -101,77 +101,23 @@ class BERTDiffuser:
     def maskable(self):
         """
         Returns a mask indicating which tokens can be masked.
-
-        Rules:
-        - Question tokens are not maskable (0)
-        - XML tags are not maskable (0)
-        - Reasoning tokens are maskable (1)
-        - Answer tokens are maskable (1)
-        - Special tokens are not maskable (0)
-        - Already masked tokens are considered maskable (1)
-        - Padding tokens are not maskable (0)
-
+        
+        In this implementation, all tokens are considered maskable,
+        including special tokens, following the MDLM approach.
+        
         Returns:
             torch.Tensor: A tensor of the same shape as input_ids, where 1 indicates maskable tokens
         """
-        batch_size = self.input_ids.size(0)
-
-        # Initialize a tensor of zeros (not maskable)
-        maskable_tensor = torch.zeros_like(self.input_ids)
-
-        # Define tags and their maskability
-        tags = {
-            "question": False,  # question tokens are not maskable
-            "reasoning": True,  # reasoning tokens are maskable
-            "answer": True      # answer tokens are maskable
-        }
-
-        # Create dictionaries to store patterns and positions
-        open_patterns = {}
-        close_patterns = {}
-        open_positions = {}
-        close_positions = {}
-
-        # Build patterns and find positions for each tag
-        for tag_name, is_maskable in tags.items():
-            # Get token IDs for the tag
-            tag_tokens = self.tokenizer.encode(tag_name, add_special_tokens=False)
-
-            # Create patterns
-            open_patterns[tag_name] = open_tag(tag_tokens)
-            close_patterns[tag_name] = close_tag(tag_tokens)
-
-            # Find positions
-            open_positions[tag_name] = find_sequences_batch(self.input_ids, open_patterns[tag_name])
-            close_positions[tag_name] = find_sequences_batch(self.input_ids, close_patterns[tag_name])
-
-        # Special tokens that are never maskable
-        special_token_ids = [
-            self.tokenizer.cls_token_id,
-            self.tokenizer.sep_token_id,
-            self.tokenizer.pad_token_id,
-            tag_start, tag_end, close_tag_start
-        ]
-
-        for i in range(batch_size):
-            # Process each tag
-            for tag_name, is_maskable in tags.items():
-                if is_maskable and len(open_positions[tag_name][i]) > 0 and len(close_positions[tag_name][i]) > 0:
-                    # Get the content between opening and closing tags
-                    start = open_positions[tag_name][i][0] + len(open_patterns[tag_name])
-                    end = close_positions[tag_name][i][0]
-
-                    # Make these tokens maskable (1)
-                    maskable_tensor[i, start:end] = 1
-
-            # Make special tokens not maskable (0)
-            for token_id in special_token_ids:
-                maskable_tensor[i] = maskable_tensor[i] * (self.input_ids[i] != token_id).int()
-
-        # Apply attention mask to ensure only tokens with attention are maskable
-        maskable_tensor = maskable_tensor * self.attention_mask
-
-        return maskable_tensor
+        # All tokens are maskable
+        return torch.ones_like(self.input_ids)
+        
+    @cached_property
+    def timesteps(self):
+        return self.input_ids.size(1)
+        
+    @cached_property
+    def timestep(self):
+        return (self.input_ids == self.tokenizer.mask_token_id).sum(dim=1)
 
     def mask(self, percentage: float):
         """
@@ -210,7 +156,7 @@ class BERTDiffuser:
         unmask = (torch.rand_like(self.input_ids.float()) < percentage) & self.masked
 
         labels = self.labels.clone()
-        labels[unmask] = self.original_ids[unmask]
+        labels[unmask] = self.input_ids[unmask]
 
         return BERTDiffuser(self.tokenizer, self.input_ids, self.attention_mask, labels, self.original_ids)
 

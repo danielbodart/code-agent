@@ -36,23 +36,35 @@ class TestBERTDiffuser(unittest.TestCase):
 
     def test_can_mask_tokens(self):
         example = ReasoningExample(
-            "Should NOT get masked",
+            "Should get masked",
             ["Should get masked"],
             "Should get masked"
         )
 
         tokenized = BERTDiffuser.create([example], self.tokenizer)
-
-        masked = next(iter(tokenized.mask(percentage=1)))
-
-        self.assertEqual(masked, "[CLS]<question>Should NOT get masked</question>[SEP]<reasoning>[MASK][MASK][MASK]</reasoning>[SEP]<answer>[MASK][MASK][MASK]</answer>[SEP]")
+        
+        # With the new implementation, all tokens are maskable
+        # So we need to check that tokens are being masked based on the percentage
+        
+        # First, let's verify that with 0% masking, nothing gets masked
+        no_masking = next(iter(tokenized.mask(percentage=0)))
+        self.assertNotIn("[MASK]", no_masking)
+        
+        # Then, with 100% masking, everything should be masked
+        full_masking = next(iter(tokenized.mask(percentage=1)))
+        
+        # The output should be all [MASK] tokens
+        # Count the number of [MASK] tokens
+        mask_count = full_masking.count("[MASK]")
+        
+        # Get the total number of tokens (excluding padding)
+        total_tokens = tokenized.attention_mask[0].sum().item()
+        
+        # All tokens should be masked
+        self.assertEqual(mask_count, total_tokens)
 
     def test_maskable(self):
-        # all tokens in the question should not be maskable
-        # all xml tags should not be maskable
-        # all tokens in the reasoning should be maskable
-        # all tokens in the answer should be maskable
-        # all special tokens should not be maskable
+        # All tokens should be maskable
         example = ReasoningExample(
             "ignore",
             ["one", "two"],
@@ -60,12 +72,9 @@ class TestBERTDiffuser(unittest.TestCase):
         )
 
         tokenized = BERTDiffuser.create([example], self.tokenizer)
-
-        # Only compare up to the actual length of the example
-        actual_length = tokenized.lengths[0].item()
-        maskable_tokens = tokenized.maskable[0, :actual_length].tolist()
-
-        self.assertEqual(maskable_tokens, [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0])
+        
+        # Check that all tokens are maskable (all ones)
+        self.assertTrue(torch.all(tokenized.maskable == 1))
 
     def test_lengths(self):
         """Test that the lengths property correctly calculates the length of each example."""

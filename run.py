@@ -14,18 +14,18 @@ def version():
 
 
 def clean():
-    print(sh.rm('-rf', 'artifacts', _err_to_out=True))
+    sh.rm('-rf', 'artifacts', _out=sys.stdout, _err=sys.stderr)
 
 
 def check():
-    sh.mypy('src', '--ignore-missing-imports', _err_to_out=True)
+    sh.mypy('src', '--ignore-missing-imports', _out=sys.stdout, _err=sys.stderr)
 
 
-def test(pattern = 'test_*.py'):
-    loader = unittest.TestLoader()
-    suite = loader.discover('test', pattern)
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+def test(test_name = None):
+    if test_name is None:
+        sh.uv('run', 'python', '-m', 'unittest', 'discover', 'test', _out=sys.stdout, _err=sys.stderr)
+    else:
+        sh.uv('run', 'python', '-m', 'unittest', test_name, _out=sys.stdout, _err=sys.stderr)
 
 
 def build():
@@ -34,42 +34,17 @@ def build():
     test()
 
 
-def train(*args):
-    check()
-    print(sh.uv('run', 'src/train_model.py', *args, _err_to_out=True))
-
-
 def train_diffusion(*args):
     check()
-    print(sh.uv('run', 'src/train_diffusion.py', *args, _err_to_out=True))
-
-
-def predict(*args):
-    check()
-    print(sh.uv('run', 'src/predict_model.py', *args, _err_to_out=True))
+    sh.uv('run', 'src/train_diffusion.py', *args, _out=sys.stdout, _err=sys.stderr)
 
 
 def predict_diffusion(*args):
     check()
-    print(sh.uv('run', 'src/predict_diffusion.py', *args, _err_to_out=True))
+    sh.uv('run', 'src/predict_diffusion.py', *args, _out=sys.stdout, _err=sys.stderr)
 
 
-def tune(*args):
-    check()
-    print(sh.uv('run', 'src/hyperparamter-tune.py', *args, _err_to_out=True))
-
-
-def simple(*args):
-    check()
-    sh.uv('run', 'src/simple_masked_model.py', *args, _out=sys.stdout, _err=sys.stderr)
-
-
-def modern_bert(*args):
-    check()
-    sh.uv('run', 'src/modern-bert-test.py', *args, _out=sys.stdout, _err=sys.stderr)
-
-
-def bert(*args):
+def predict_bert(*args):
     check()
     sh.uv('run', 'src/predict_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
 
@@ -98,7 +73,7 @@ if __name__ == "__main__":
             print(f"Invalid target '{func_name}'")
     else:
         try:
-            print(sh.uv('run', *sys.argv[1:], _err_to_out=True))
+            sh.uv('run', *sys.argv[1:], _out=sys.stdout, _err=sys.stderr)
         except sh.ErrorReturnCode as e:
             print(e.stdout.decode())
             sys.exit(e.exit_code)

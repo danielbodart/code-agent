@@ -1,22 +1,28 @@
 import math
-from typing import List, Iterator, Tuple
-from itertools import accumulate, pairwise, tee
+from typing import Iterator, Tuple
 
-
-def fibonacci_pairs() -> Iterator[Tuple[int, int]]:
+def loglinear_pairs(a: float = 2, b: float = 0.25) -> Iterator[Tuple[int, int]]:
     """
-    Generate the Fibonacci sequence.
+    Generate a loglinear sequence of pairs.
+    
+    Args:
+        a: Base value (default: 2)
+        b: Growth rate (default: 0.25)
     
     Yields:
-        Consecutive Fibonacci pairs starting from (0, 1), (1, 1), (1, 2), (2, 3), (3, 5), ...
+        Consecutive loglinear pairs with exponential growth
     """
-    a, b = 0, 1
+    step = 0
+    current = max(1, int(a * math.exp(b * step)))
+    
     while True:
-        yield a, b
-        a, b = b, a + b
+        step += 1
+        next_val = max(1, int(a * math.exp(b * step)))
+        yield current, next_val
+        current = next_val
 
 
-def calculate_tokens_per_step(tokens: int) -> List[int]:
+def calculate_tokens_per_step(tokens: int) -> Iterator[int]:
     """
     Calculate how many tokens to unmask at each step using a Fibonacci schedule.
     
@@ -28,7 +34,7 @@ def calculate_tokens_per_step(tokens: int) -> List[int]:
         with values always increasing or staying the same.
     """
     if tokens <= 0:
-        raise ValueError("Maximum tokens must be positive")
+        return
     
     # For a single token, just return it
     if tokens == 1:
@@ -36,7 +42,7 @@ def calculate_tokens_per_step(tokens: int) -> List[int]:
         return
 
     sum = 0
-    for (a, b) in fibonacci_pairs():
+    for (a, b) in loglinear_pairs():
         if a == 0:
             continue
         sum += a

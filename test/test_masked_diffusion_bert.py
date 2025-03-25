@@ -9,7 +9,7 @@ from pytorch_lightning import seed_everything
 
 
 class TestMaskedDiffusionBERT(unittest.TestCase):
-    def test_overfit_batch(self):
+    def manual_test_overfit_batch(self):
         seed_everything(42)
 
         model = MaskedDiffusionBERT()

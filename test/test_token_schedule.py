@@ -1,99 +1,71 @@
 import unittest
-import math
 from src.token_schedule import calculate_tokens_per_step
 
 
 class TestTokenSchedule(unittest.TestCase):
     
-    def test_basic_functionality(self):
-        """Test the basic functionality with standard parameters."""
-        # Test with 512 tokens and 15 steps
-        schedule = calculate_tokens_per_step(15, 512)
-        
-        # Check that we have the right number of steps
-        self.assertEqual(len(schedule), 15)
-        
-        # Check that the total is exactly the requested amount
+    def test_specific_examples(self):
+        """Test specific examples with known expected outputs."""
+        # Test with 512 tokens
+        schedule = list(calculate_tokens_per_step(512))
+        self.assertEqual(schedule, [2, 2, 3, 4, 5, 6, 8, 11, 14, 18, 24, 31, 40, 51, 66, 85, 142])
         self.assertEqual(sum(schedule), 512)
         
-        # Check that the schedule follows a loglinear progression (each step should be >= the previous)
-        for i in range(1, len(schedule)):
-            self.assertGreaterEqual(schedule[i], schedule[i-1])
-    
-    def test_single_step(self):
-        """Test with a single step."""
-        schedule = calculate_tokens_per_step(1, 100)
-        self.assertEqual(schedule, [100])
+        # Test with 100 tokens
+        schedule = list(calculate_tokens_per_step(100))
+        self.assertEqual(schedule, [2, 2, 3, 4, 5, 6, 8, 11, 14, 18, 27])
         self.assertEqual(sum(schedule), 100)
-    
-    def test_low_token_count(self):
-        """Test with a low number of tokens."""
-        # Test with 5 tokens and 5 steps
-        schedule = calculate_tokens_per_step(5, 5)
-        self.assertEqual(len(schedule), 5)
+        
+        # Test with 10 tokens
+        schedule = list(calculate_tokens_per_step(10))
+        self.assertEqual(schedule, [2, 2, 6])
+        self.assertEqual(sum(schedule), 10)
+        
+        # Test with 5 tokens
+        schedule = list(calculate_tokens_per_step(5))
+        self.assertEqual(schedule, [2, 3])
         self.assertEqual(sum(schedule), 5)
-        
-        # With low token counts, we expect a distribution that sums to the token count
-        self.assertEqual(sum(schedule), 5)
     
-    def test_tokens_less_than_steps(self):
-        """Test when the number of tokens is less than the number of steps."""
-        # Test with 3 tokens and 10 steps
-        schedule = calculate_tokens_per_step(10, 3)
+    def test_small_values(self):
+        """Test with very small token counts."""
+        # Test with 4 tokens
+        schedule = list(calculate_tokens_per_step(4))
+        self.assertEqual(schedule, [2, 2])
+        self.assertEqual(sum(schedule), 4)
         
-        # We should have 10 steps
-        self.assertEqual(len(schedule), 10)
-        
-        # The total should be exactly 3
+        # Test with 3 tokens
+        schedule = list(calculate_tokens_per_step(3))
+        self.assertEqual(schedule, [3])
         self.assertEqual(sum(schedule), 3)
         
-        # Each step should have at least 0 tokens
-        for tokens in schedule:
-            self.assertGreaterEqual(tokens, 0)
+        # Test with 2 tokens
+        schedule = list(calculate_tokens_per_step(2))
+        self.assertEqual(schedule, [2])
+        self.assertEqual(sum(schedule), 2)
+        
+        # Test with 1 token
+        schedule = list(calculate_tokens_per_step(1))
+        self.assertEqual(schedule, [1])
+        self.assertEqual(sum(schedule), 1)
     
-    def test_tokens_equal_steps(self):
-        """Test when the number of tokens equals the number of steps."""
-        # Test with 10 tokens and 10 steps
-        schedule = calculate_tokens_per_step(10, 10)
-        
-        # We should have 10 steps
-        self.assertEqual(len(schedule), 10)
-        
-        # The total should be exactly 10
-        self.assertEqual(sum(schedule), 10)
-    
-    def test_large_values(self):
-        """Test with large numbers of tokens and steps."""
-        # Test with 10000 tokens and 100 steps
-        schedule = calculate_tokens_per_step(100, 10000)
-        
-        # We should have 100 steps
-        self.assertEqual(len(schedule), 100)
-        
-        # The total should be exactly 10000
-        self.assertEqual(sum(schedule), 10000)
-        
-        # The schedule should follow a loglinear progression
-        for i in range(1, len(schedule)):
-            self.assertGreaterEqual(schedule[i], schedule[i-1])
+    def test_always_increasing(self):
+        """Test that values are always increasing or staying the same."""
+        # Test with various token counts
+        for tokens in [512, 100, 10, 5, 4, 3, 2, 1]:
+            schedule = list(calculate_tokens_per_step(tokens))
+            # Skip if only one step
+            if len(schedule) > 1:
+                for i in range(1, len(schedule)):
+                    self.assertGreaterEqual(schedule[i], schedule[i-1], 
+                                           f"Failed with tokens={tokens}, schedule={schedule}")
     
     def test_zero_tokens(self):
-        """Test with zero tokens (should raise ValueError)."""
-        with self.assertRaises(ValueError):
-            calculate_tokens_per_step(5, 0)
-    
-    def test_zero_steps(self):
-        """Test with zero steps (should raise ValueError)."""
-        with self.assertRaises(ValueError):
-            calculate_tokens_per_step(0, 100)
+        schedule = list(calculate_tokens_per_step(0))
+        self.assertEqual(schedule, [])
     
     def test_negative_values(self):
-        """Test with negative values (should raise ValueError)."""
-        with self.assertRaises(ValueError):
-            calculate_tokens_per_step(-5, 100)
-        
-        with self.assertRaises(ValueError):
-            calculate_tokens_per_step(5, -100)
+        schedule = list(calculate_tokens_per_step(-100))
+        self.assertEqual(schedule, [])
 
 
 if __name__ == "__main__":

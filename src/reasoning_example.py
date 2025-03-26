@@ -22,8 +22,12 @@ class ReasoningExample:
         Makes the ReasoningExample iterable, yielding [question, reasoning, answer].
         This allows unpacking like: question, reasoning, answer = example
         """
-        yield "<question>" + self.question + "</question>"
-        yield "<reasoning>" + "\n".join(self.reasoning_steps) + "</reasoning>"
-        yield "<answer>" + self.answer + "</answer>"
+        yield self.question
+        yield "\n".join(self.reasoning_steps)
+        yield self.answer
+
+    def __str__(self) -> str:
+        return "[SEP]".join(self)
+        
 
 

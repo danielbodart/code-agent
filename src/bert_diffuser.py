@@ -1,48 +1,58 @@
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import List, Iterator
+from typing import List
 
 import torch
-from transformers import AutoTokenizer
+from transformers import PreTrainedTokenizerFast, BatchEncoding
 
-from src.tokens import open_tag, close_tag, find_sequences_batch, tag_start, tag_end, close_tag_start
+def tokenize(tokenizer:PreTrainedTokenizerFast, examples:List[str], max_length=512) -> BatchEncoding:
+    """
+    Tokenize a list of examples.
+
+    Args:
+        tokenizer: HuggingFace tokenizer
+        examples: List of examples, where each example is an iterator of strings
+        max_length: Maximum sequence length
+
+    Returns:
+        A dictionary containing token IDs and attention mask
+    """
+    return tokenizer(
+        text=examples,
+        max_length=max_length,
+        truncation=True,
+        padding='max_length',
+        return_tensors='pt',
+        return_attention_mask=True,
+    )
 
 
 @dataclass(frozen=True)
 class BERTDiffuser:
     """Collection of tokenized examples."""
 
-    tokenizer:AutoTokenizer
+    tokenizer:PreTrainedTokenizerFast
     input_ids:torch.Tensor
     attention_mask:torch.Tensor
     original_ids:torch.Tensor
 
     @classmethod
-    def create(cls, examples:List[Iterator[str]], tokenizer:AutoTokenizer, max_length=512):
+    def from_batch(cls, tokenizer:PreTrainedTokenizerFast, batch:BatchEncoding):
         """
-        Create a BERTDiffuser instance from a list of examples.
+        Create a BERTDiffuser instance from a batch of tokenized examples.
 
         Args:
-            examples: List of examples, where each example is an iterator of strings
             tokenizer: HuggingFace tokenizer
-            max_length: Maximum sequence length
+            batch: Batch of tokenized examples
 
         Returns:
             A new BERTDiffuser instance
         """
-        encoded = tokenizer(
-            text=["[SEP]".join(example) for example in examples],
-            max_length=max_length,
-            truncation=True,
-            padding='max_length',
-            return_tensors='pt',
-            return_attention_mask=True,
-        )
+        return cls(tokenizer, batch["input_ids"], batch["attention_mask"], batch["input_ids"].clone())
 
-        return cls.from_tensors(tokenizer, encoded['input_ids'], encoded['attention_mask'])
 
     @classmethod
-    def from_tensors(cls, tokenizer:AutoTokenizer, input_ids:torch.Tensor, attention_mask:torch.Tensor):
+    def from_tensors(cls, tokenizer:PreTrainedTokenizerFast, input_ids:torch.Tensor, attention_mask:torch.Tensor):
         """
         Create a BERTDiffuser instance from a list of examples.
 
@@ -117,14 +127,6 @@ class BERTDiffuser:
         """
         # All tokens are maskable
         return torch.ones_like(self.input_ids)
-        
-    @cached_property
-    def timesteps(self):
-        return self.input_ids.size(1)
-        
-    @cached_property
-    def timestep(self):
-        return (self.input_ids == self.tokenizer.mask_token_id).sum(dim=1)
 
     def mask(self, percentage: float):
         """

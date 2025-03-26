@@ -3,13 +3,13 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from typing import Iterator
 from transformers import AutoTokenizer
-from src.token_schedule import calculate_tokens_per_step
+from src.noise_schedule import noise_schedule
 from src.update_mask import calculate_update_mask, gumbel_max_sampling
 
 from transformers import (
     AutoModelForMaskedLM,
 )
-from src.bert_diffuser import BERTDiffuser
+from src.bert_diffuser import BERTDiffuser, tokenize
 
 
 ###############################
@@ -84,16 +84,16 @@ class MaskedDiffusionBERT(pl.LightningModule):
         Yields BERTDiffuser instances at each step of the unmasking process.
         
         Args:
-            tokenized_examples: BERTDiffuser instance with masked tokens
+            state: BERTDiffuser instance with masked tokens
         Yields:
             BERTDiffuser: Current state of BERTDiffuser with some positions unmasked
         """
-        current_examples = state
-        number_of_masks = current_examples.masked.sum().item()
+        current_state = state
+        total_masks = current_state.masked.sum().item()
         
-        for to_unmask in calculate_tokens_per_step(number_of_masks):
-            current_examples = self.predict_step(current_examples, to_unmask)
-            yield current_examples
+        for masks_in_step in noise_schedule(total_masks):
+            current_state = self.predict_step(current_state, masks_in_step)
+            yield current_state
 
 
     def unmask(self, input_text, max_length=512):
@@ -101,7 +101,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Yields intermediate steps as an iterator.
         """
-        state = BERTDiffuser.create([input_text], self.tokenizer, max_length)
+        state = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(input_text)], max_length=max_length))
         for updated in self.predict(state):
             # Yield the decoded text at each step
             yield self.tokenizer.decode(updated.input_ids[0], skip_special_tokens=True)

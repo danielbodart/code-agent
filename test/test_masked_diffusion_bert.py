@@ -7,10 +7,10 @@ from src.bert_diffuser import BERTDiffuser
 from src.addition_reasoning_dataset import AdditionReasoningDataset
 from pytorch_lightning import seed_everything
 
+seed_everything(42)
 
 class TestMaskedDiffusionBERT(unittest.TestCase):
-    def test_overfit_batch(self):
-        seed_everything(42)
+    def manual_test_overfit_batch(self):
 
         model = MaskedDiffusionBERT()
         tokenizer = model.tokenizer
@@ -28,7 +28,14 @@ class TestMaskedDiffusionBERT(unittest.TestCase):
         trainer.fit(model, dataloader)
         
         with torch.no_grad():
-            print(model.generate("<question>What is 2 + 2?</question><answer>[MASK]</answer>"))
+            print(model.generate("What is 2 + 2?[SEP][MASK]"))
+        
+    def test_generate(self):
+        """ Check we haven't broken the underlying Modern BERT model """
+        model = MaskedDiffusionBERT()
+        
+        with torch.no_grad():
+            self.assertEqual(model.generate("The capital of France is [MASK]."), "The capital of France is Paris.")
 
 
 if __name__ == '__main__':

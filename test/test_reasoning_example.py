@@ -23,7 +23,16 @@ class TestReasoningExample(unittest.TestCase):
         
         items = list(example)
         self.assertEqual(len(items), 3)
-        self.assertEqual(items[0], "<question>Question</question>")
-        self.assertEqual(items[1], "<reasoning>Reasoning Step 1\nReasoning Step 2</reasoning>")
-        self.assertEqual(items[2], "<answer>Answer</answer>")
+        self.assertEqual(items[0], "Question")
+        self.assertEqual(items[1], "Reasoning Step 1\nReasoning Step 2")
+        self.assertEqual(items[2], "Answer")
+
+    def test_str(self):
+        example = ReasoningExample(
+            "A",
+            ["B", "C"],
+            "D"
+        )
+        
+        self.assertEqual(str(example), "A[SEP]B\nC[SEP]D")
 

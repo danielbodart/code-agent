@@ -28,7 +28,7 @@ def tokenize(tokenizer:PreTrainedTokenizerFast, examples:List[str], max_length=5
 
 
 @dataclass(frozen=True)
-class BERTDiffuser:
+class MaskedDiffusionState:
     """Collection of tokenized examples."""
 
     tokenizer:PreTrainedTokenizerFast
@@ -146,7 +146,7 @@ class BERTDiffuser:
         masked_inputs = self.input_ids.clone()
         masked_inputs[mask] = self.tokenizer.mask_token_id
 
-        return BERTDiffuser(self.tokenizer, masked_inputs, self.attention_mask, self.original_ids)
+        return MaskedDiffusionState(self.tokenizer, masked_inputs, self.attention_mask, self.original_ids)
 
     def update(self, predicted_ids, update_mask=None):
         """
@@ -170,4 +170,4 @@ class BERTDiffuser:
         updated_input_ids[mask] = predicted_ids[mask]
 
         # Return a new BERTDiffuser instance with updated input_ids
-        return BERTDiffuser(self.tokenizer, updated_input_ids, self.attention_mask, self.original_ids)
+        return MaskedDiffusionState(self.tokenizer, updated_input_ids, self.attention_mask, self.original_ids)

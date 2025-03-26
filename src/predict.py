@@ -8,7 +8,7 @@ plus an iterative inference procedure that un-masks tokens step by step.
 
 """
 import torch
-from masked_diffusion_bert import MaskedDiffusionBERT
+from masked_diffusion_model import MaskedDiffusionModel
 
 
 def main():
@@ -17,7 +17,7 @@ def main():
     torch.set_float32_matmul_precision('medium')
 
     # Initialize the model
-    model = MaskedDiffusionBERT()
+    model = MaskedDiffusionModel()
     
     # Test the model on a sample text with device handling
     test_text = """Question: What is the capital of Panama? Answer: [MASK][MASK]"""

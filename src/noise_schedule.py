@@ -1,5 +1,5 @@
 import math
-from typing import Iterator, Tuple
+from typing import Iterator
 from itertools import pairwise
 
 def loglinear(base: float = 2, growth: float = 0.25) -> Iterator[int]:

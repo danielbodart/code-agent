@@ -4,18 +4,15 @@ import pytorch_lightning as pl
 from typing import Iterator
 from transformers import AutoTokenizer
 from src.noise_schedule import noise_schedule
-from src.update_mask import calculate_update_mask, gumbel_max_sampling
+from src.update_mask import select_top_confidence_positions, gumbel_max_sampling
 
 from transformers import (
     AutoModelForMaskedLM,
 )
-from src.bert_diffuser import BERTDiffuser, tokenize
+from src.masked_diffusion_state import MaskedDiffusionState, tokenize
 
 
-###############################
-# 2) LightningModule
-###############################
-class MaskedDiffusionBERT(pl.LightningModule):
+class MaskedDiffusionModel(pl.LightningModule):
     def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-5):
         super().__init__()
         self.model = AutoModelForMaskedLM.from_pretrained(model_name)
@@ -24,7 +21,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         self.mask_token_id = self.tokenizer.mask_token_id
         self.lr = lr
 
-    def forward(self, state: BERTDiffuser):
+    def forward(self, state: MaskedDiffusionState):
         return self.model(input_ids=state.input_ids, attention_mask=state.attention_mask, labels=state.labels).logits
 
     def training_step(self, batch, batch_idx: int):
@@ -34,7 +31,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
             3. Compute loss only on masked positions
         """
         # 1) Apply noise (randomly mask some tokens)
-        state = BERTDiffuser.from_tensors(self.tokenizer, batch["input_ids"], batch["attention_mask"])
+        state = MaskedDiffusionState.from_batch(self.tokenizer, batch)
         
         # Use a masking probability between 0 and 1.0
         mask_prob = torch.rand(1).item()
@@ -54,22 +51,22 @@ class MaskedDiffusionBERT(pl.LightningModule):
         return loss
         
 
-    def predict_step(self, state, to_unmask):
+    def predict_step(self, state, number_of_masks):
         """
         Performs one step of the prediction process, unmasking the most confident positions.
         
         Args:
-            state: Current BERTDiffuser state
+            state: Current MaskedDiffusionState
             to_unmask: Number of positions to unmask
             
         Returns:
-            Updated BERTDiffuser state
+            Updated MaskedDiffusionState
         """
         # Forward pass to get logits
         logits = self.forward(state)
         
         # Calculate which positions to update
-        update_mask = calculate_update_mask(state, logits, to_unmask)
+        update_mask = select_top_confidence_positions(state, logits, number_of_masks)
         
         # Sample from the model's distribution
         sampled_tokens = gumbel_max_sampling(logits)
@@ -78,15 +75,15 @@ class MaskedDiffusionBERT(pl.LightningModule):
         return state.update(sampled_tokens, update_mask)
 
 
-    def predict(self, state: BERTDiffuser) -> Iterator[BERTDiffuser]:
+    def predict(self, state: MaskedDiffusionState) -> Iterator[MaskedDiffusionState]:
         """
-        Iterative unmasking generator: Takes masked BERTDiffuser and gradually fills them in.
-        Yields BERTDiffuser instances at each step of the unmasking process.
+        Iterative unmasking generator: Takes masked MaskedDiffusionState and gradually fills them in.
+        Yields MaskedDiffusionState instances at each step of the unmasking process.
         
         Args:
-            state: BERTDiffuser instance with masked tokens
+            state: MaskedDiffusionState with masked tokens
         Yields:
-            BERTDiffuser: Current state of BERTDiffuser with some positions unmasked
+            MaskedDiffusionState: Current state of MaskedDiffusionState with some positions unmasked
         """
         current_state = state
         total_masks = current_state.masked.sum().item()
@@ -101,7 +98,7 @@ class MaskedDiffusionBERT(pl.LightningModule):
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Yields intermediate steps as an iterator.
         """
-        state = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(input_text)], max_length=max_length))
+        state = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(input_text)], max_length=max_length))
         for updated in self.predict(state):
             # Yield the decoded text at each step
             yield self.tokenizer.decode(updated.input_ids[0], skip_special_tokens=True)

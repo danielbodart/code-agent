@@ -3,11 +3,11 @@ import unittest
 import torch
 from transformers import AutoTokenizer
 
-from src.bert_diffuser import BERTDiffuser, tokenize
+from src.masked_diffusion_state import MaskedDiffusionState, tokenize
 from src.reasoning_example import ReasoningExample
 
 
-class TestBERTDiffuser(unittest.TestCase):
+class TestMaskedDiffusionState(unittest.TestCase):
     tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-large")
 
     def test_tokenization(self):
@@ -17,7 +17,7 @@ class TestBERTDiffuser(unittest.TestCase):
             "Answer"
         )
 
-        tokenized = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
 
         self.assertEqual(tokenized.input_ids[0, :3].tolist(), [self.tokenizer.cls_token_id, 23433, self.tokenizer.sep_token_id])
         self.assertEqual(tokenized.attention_mask[0, :3].tolist(), [1, 1, 1])
@@ -36,7 +36,7 @@ class TestBERTDiffuser(unittest.TestCase):
             "Should get masked"
         )
 
-        tokenized = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
         
         # With the new implementation, all tokens are maskable
         # So we need to check that tokens are being masked based on the percentage
@@ -66,7 +66,7 @@ class TestBERTDiffuser(unittest.TestCase):
             "three"
         )
 
-        tokenized = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
         
         # Check that all tokens are maskable (all ones)
         self.assertTrue(torch.all(tokenized.maskable == 1))
@@ -85,7 +85,7 @@ class TestBERTDiffuser(unittest.TestCase):
             "longer answer with more tokens too"
         )
 
-        tokenized = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example1), str(example2)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example1), str(example2)]))
 
         lengths = tokenized.lengths
 
@@ -101,7 +101,7 @@ class TestBERTDiffuser(unittest.TestCase):
             "This is the answer"
         )
 
-        tokenized = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
 
         masked = tokenized.mask(percentage=0.5)
         mask_count = masked.masked.sum().item()
@@ -121,7 +121,7 @@ class TestBERTDiffuser(unittest.TestCase):
             "This is an answer"
         )
 
-        tokenized = BERTDiffuser.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
         masked = tokenized.mask(percentage=1.0)
 
         predicted_ids = torch.randint(1000, 5000, (masked.input_ids.shape[0], masked.input_ids.shape[1]))

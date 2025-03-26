@@ -2,17 +2,16 @@ import unittest
 import torch
 from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
-from src.masked_diffusion_bert import MaskedDiffusionBERT
-from src.bert_diffuser import BERTDiffuser
 from src.addition_reasoning_dataset import AdditionReasoningDataset
 from pytorch_lightning import seed_everything
+from src.masked_diffusion_model import MaskedDiffusionModel
 
 seed_everything(42)
 
-class TestMaskedDiffusionBERT(unittest.TestCase):
+class TestMaskedDiffusionModel(unittest.TestCase):
     def manual_test_overfit_batch(self):
 
-        model = MaskedDiffusionBERT()
+        model = MaskedDiffusionModel()
         tokenizer = model.tokenizer
         
         dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100)
@@ -32,7 +31,7 @@ class TestMaskedDiffusionBERT(unittest.TestCase):
         
     def test_generate(self):
         """ Check we haven't broken the underlying Modern BERT model """
-        model = MaskedDiffusionBERT()
+        model = MaskedDiffusionModel()
         
         with torch.no_grad():
             self.assertEqual(model.generate("The capital of France is [MASK]."), "The capital of France is Paris.")

@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from src.bert_diffuser import BERTDiffuser
+from src.masked_diffusion_state import MaskedDiffusionState
 
 def gumbel_max_sampling(logits):
     """Gumbel-max sampling for categorical distribution"""
@@ -8,12 +8,12 @@ def gumbel_max_sampling(logits):
     return (logits + gumbel_noise).argmax(dim=-1)
 
 
-def calculate_update_mask(state: BERTDiffuser, logits: torch.Tensor, to_unmask: int) -> torch.Tensor:
+def select_top_confidence_positions(state: MaskedDiffusionState, logits: torch.Tensor, to_unmask: int) -> torch.Tensor:
     """
     Calculate which positions to update based on model confidence.
     
     Args:
-        state: Current BERTDiffuser state
+        state: Current MaskedDiffusionState
         logits: Model logits
         to_unmask: Number of positions to unmask
         

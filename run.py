@@ -36,12 +36,12 @@ def build():
 
 def predict(*args):
     check()
-    sh.uv('run', 'src/predict_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
+    sh.uv('run', 'src/predict.py', *args, _out=sys.stdout, _err=sys.stderr)
 
 
 def train(*args):
     check()
-    sh.uv('run', 'src/train_masked_diffusion_bert.py', *args, _out=sys.stdout, _err=sys.stderr)
+    sh.uv('run', 'src/train.py', *args, _out=sys.stdout, _err=sys.stderr)
 
 
 def ci():

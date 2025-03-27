@@ -5,8 +5,10 @@ from pytorch_lightning import Trainer
 from src.addition_reasoning_dataset import AdditionReasoningDataset
 from pytorch_lightning import seed_everything
 from src.masked_diffusion_model import MaskedDiffusionModel
+from src.setup import setup
 
 seed_everything(42)
+setup()
 
 class TestMaskedDiffusionModel(unittest.TestCase):
     def test_overfit_batch(self):
@@ -15,7 +17,7 @@ class TestMaskedDiffusionModel(unittest.TestCase):
         tokenizer = model.tokenizer
         
         dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100)
-        dataloader = DataLoader(dataset, batch_size=2, pin_memory=True)
+        dataloader = DataLoader(dataset, batch_size=2)
         
         trainer = Trainer(
             fast_dev_run=True,

@@ -13,7 +13,6 @@ class MaskedDiffusionModel(pl.LightningModule):
     def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-5):
         super().__init__()
         self.model = ModernBertForMaskedLM.from_pretrained(model_name)
-        self.model.train()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.mask_token_id = self.tokenizer.mask_token_id
         self.lr = lr

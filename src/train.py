@@ -7,8 +7,10 @@ from masked_diffusion_model import MaskedDiffusionModel
 from addition_reasoning_dataset import AdditionReasoningDataset
 from src.masked_diffusion_state import MaskedDiffusionState
 from pytorch_lightning import seed_everything
+from src.setup import setup
 
 seed_everything(42)
+setup()
 
 model = MaskedDiffusionModel()
 tokenizer = model.tokenizer

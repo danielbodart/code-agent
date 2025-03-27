@@ -6,23 +6,20 @@ from transformers import AutoTokenizer
 from src.noise_schedule import noise_schedule
 from src.update_mask import select_top_confidence_positions, gumbel_max_sampling
 
-from transformers import (
-    AutoModelForMaskedLM,
-)
+from transformers import ModernBertForMaskedLM
 from src.masked_diffusion_state import MaskedDiffusionState, tokenize
-
 
 class MaskedDiffusionModel(pl.LightningModule):
     def __init__(self, model_name="answerdotai/ModernBERT-large", lr=1e-5):
         super().__init__()
-        self.model = AutoModelForMaskedLM.from_pretrained(model_name)
+        self.model: ModernBertForMaskedLM = ModernBertForMaskedLM.from_pretrained(model_name)
         self.model.train()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.mask_token_id = self.tokenizer.mask_token_id
         self.lr = lr
 
     def forward(self, state: MaskedDiffusionState):
-        return self.model(input_ids=state.input_ids, attention_mask=state.attention_mask, labels=state.labels).logits
+        return self.model(input_ids=state.input_ids, attention_mask=state.attention_mask, labels=state.labels)
 
     def training_step(self, batch, batch_idx: int):
         """ Training step: 
@@ -30,23 +27,15 @@ class MaskedDiffusionModel(pl.LightningModule):
             2. Pass masked sequence through model
             3. Compute loss only on masked positions
         """
-        # 1) Apply noise (randomly mask some tokens)
         state = MaskedDiffusionState.from_batch(self.tokenizer, batch)
         
-        # Use a masking probability between 0 and 1.0
+        # 1) Apply noise (randomly mask some tokens)
         mask_prob = torch.rand(1).item()
         masked = state.mask(mask_prob)
         
-        # 2) Forward pass
-        logits = self.forward(masked)
+        # 2) Forward pass and compute loss
+        loss = self.forward(masked).loss
         
-        # 3) Compute loss only for masked tokens
-        loss_indices = masked.masked.view(-1)  # Flatten the mask to match flattened logits
-        loss = F.cross_entropy(
-            logits.view(-1, self.model.config.vocab_size)[loss_indices], 
-            masked.original_ids.view(-1)[loss_indices]
-        )
-
         self.log("train_loss", loss, prog_bar=True)
         return loss
         
@@ -57,13 +46,13 @@ class MaskedDiffusionModel(pl.LightningModule):
         
         Args:
             state: Current MaskedDiffusionState
-            to_unmask: Number of positions to unmask
+            number_of_masks: Number of positions to unmask
             
         Returns:
             Updated MaskedDiffusionState
         """
         # Forward pass to get logits
-        logits = self.forward(state)
+        logits = self.forward(state).logits
         
         # Calculate which positions to update
         update_mask = select_top_confidence_positions(state, logits, number_of_masks)
@@ -89,8 +78,7 @@ class MaskedDiffusionModel(pl.LightningModule):
         total_masks = current_state.masked.sum().item()
         
         for masks_in_step in noise_schedule(total_masks):
-            current_state = self.predict_step(current_state, masks_in_step)
-            yield current_state
+            yield (current_state := self.predict_step(current_state, masks_in_step))
 
 
     def unmask(self, input_text, max_length=512):

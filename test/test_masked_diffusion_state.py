@@ -106,7 +106,7 @@ class TestMaskedDiffusionState(unittest.TestCase):
         masked = tokenized.mask(percentage=0.5)
         mask_count = masked.masked.sum().item()
 
-        self.assertEqual((masked.labels == self.tokenizer.mask_token_id).sum().item(), mask_count)
+        self.assertEqual((masked.labels == -100).sum().item(), masked.input_ids.size(1) - mask_count)
 
         self.assertGreater(mask_count, 0, "Should mask at least some tokens")
         max_maskable = (tokenized.maskable == 1).sum().item()

@@ -86,13 +86,7 @@ class MaskedDiffusionState:
 
     @cached_property
     def labels(self):
-        """
-        All input_ids that are not [MASK] will be -100, otherwise will be the original token ID
-
-        Returns:
-            torch.Tensor: A 2D tensor containing the original token IDs for each example
-        """
-        return torch.where(self.input_ids == self.tokenizer.mask_token_id, self.input_ids, -100)
+        return torch.where(self.input_ids == self.tokenizer.mask_token_id, self.original_ids, -100)
 
     @cached_property
     def lengths(self):

@@ -9,7 +9,7 @@ from src.masked_diffusion_model import MaskedDiffusionModel
 seed_everything(42)
 
 class TestMaskedDiffusionModel(unittest.TestCase):
-    def manual_test_overfit_batch(self):
+    def test_overfit_batch(self):
 
         model = MaskedDiffusionModel()
         tokenizer = model.tokenizer
@@ -30,6 +30,7 @@ class TestMaskedDiffusionModel(unittest.TestCase):
             print(model.generate("What is 2 + 2?[SEP][MASK]"))
         
     def test_generate(self):
+        
         """ Check we haven't broken the underlying Modern BERT model """
         model = MaskedDiffusionModel()
         

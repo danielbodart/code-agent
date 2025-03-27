@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11.11"
 dependencies = [
     "datasets>=3.4.1",
+    "debugpy>=1.8.13",
     "hypothesis>=6.128.2",
     "lightning>=2.5.0.post0",
     "mypy>=1.15.0",

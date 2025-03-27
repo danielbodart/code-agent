@@ -2,7 +2,7 @@ from torch.utils.data import Dataset
 from functools import lru_cache
 import random
 from src.data_generator import generate_addition_example
-from src.masked_diffusion_state import MaskedDiffusionState
+from src.masked_diffusion_state import MaskedDiffusionState, tokenize
 
 class AdditionReasoningDataset(Dataset):
     def __init__(self, tokenizer, num_examples=10000, max_number=1000):

@@ -16,7 +16,7 @@ class TestMaskedDiffusionModel(unittest.TestCase):
         tokenizer = model.tokenizer
         
         dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100)
-        dataloader = DataLoader(dataset, batch_size=2)
+        dataloader = DataLoader(dataset, batch_size=32)
         
         trainer = Trainer(
             fast_dev_run=True,
@@ -36,6 +36,8 @@ class TestMaskedDiffusionModel(unittest.TestCase):
         
         with torch.no_grad():
             print(model.generate("What is 2 + 2?[SEP][MASK]"))
+            print(model.generate("What is 3 + 5?[SEP][MASK]"))
+            print(model.generate("What is 10 + 7?[SEP][MASK]"))
         
     def test_generate(self):
         

@@ -12,30 +12,22 @@ from src.setup import setup
 seed_everything(42)
 setup()
 
-model = MaskedDiffusionModel()
+model = MaskedDiffusionModel(lr=1e-4)
 tokenizer = model.tokenizer
 
 dataset = AdditionReasoningDataset(tokenizer, num_examples=10000, max_number=1000)
+dataloader = DataLoader(dataset, batch_size=32)
 
-dataloader = DataLoader(
-    dataset, 
-    batch_size=2, 
-    shuffle=True,
-    num_workers=min(os.cpu_count() or 1, 16),
-    pin_memory=True
+trainer = Trainer(
+    max_epochs=10,
+    accumulate_grad_batches=8, 
+    precision="bf16-mixed",
+    accelerator="gpu"
 )
 
-trainer = Trainer( max_epochs=6, default_root_dir="checkpoints", accumulate_grad_batches=8, precision="bf16-mixed" )
-
-print("Starting training...")
 trainer.fit(model, dataloader)
 
-# Test the model on a few examples
-print("\nTesting model on a few examples:")
-test_batch = next(iter(dataloader))
-with torch.no_grad():
-    # Create a BERTDiffuser instance directly since we already have tokenized data
-    masked = MaskedDiffusionState.from_batch(tokenizer, test_batch).mask(0.1)
-    for i, (updated_examples) in enumerate(model.predict(masked)):
-        decoded = tokenizer.decode(updated_examples.input_ids[0], skip_special_tokens=False)
-        print(f"Example {i+1}:\n{decoded}\n")
+model.model.cuda()
+
+print(model.generate("What is 2 + 2?[SEP][MASK]"))
+print(model.generate("What is 324 + 5324?[SEP][MASK][MASK]"))

@@ -12,7 +12,6 @@ setup()
 
 class TestMaskedDiffusionModel(unittest.TestCase):
     def test_overfit_batch(self):
-
         model = MaskedDiffusionModel()
         tokenizer = model.tokenizer
         
@@ -24,9 +23,16 @@ class TestMaskedDiffusionModel(unittest.TestCase):
             overfit_batches=1,
             accumulate_grad_batches=8, 
             precision="bf16-mixed",
+            accelerator="gpu"
         )
         
         trainer.fit(model, dataloader)
+
+        # predictions = trainer.predict(model, dataloader)
+
+        # print(predictions)
+
+        model.model.cuda()
         
         with torch.no_grad():
             print(model.generate("What is 2 + 2?[SEP][MASK]"))

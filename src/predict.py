@@ -24,8 +24,12 @@ else:
     model = MaskedDiffusionModel.load_from_checkpoint(checkpoint)
     print(f"Loading checkpoint: {checkpoint}")
 
-print(model.generate("What is 2 + 2?[SEP][MASK]"))
-print(model.generate("What is 324 + 5324?[SEP][MASK][MASK]"))
+print(model.generate("What is 2 + 2?[SEP][MASK][MASK]"))
+print(model.generate("What is 4 + 9?[SEP][MASK][MASK]"))
+print(model.generate("What is 9 + 18?[SEP][MASK][MASK]"))
+print(model.generate("What is 45 + 24?[SEP][MASK][MASK]"))
+print(model.generate("What is 31 + 12?[SEP][MASK][MASK]"))
+print(model.generate("What is 99 + 99?[SEP][MASK][MASK]"))
 
 
 

@@ -22,7 +22,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size)
 val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
 trainer = Trainer(
-    max_time="00:00:10:00",
+    max_time="00:00:20:00",
     accumulate_grad_batches=4, 
     precision="bf16-mixed",
     accelerator="gpu",
@@ -38,5 +38,9 @@ trainer.fit(model, train_loader, val_loader, ckpt_path=checkpoint)
 
 model.model.cuda()
 
-print(model.generate("What is 2 + 2?[SEP][MASK]"))
-print(model.generate("What is 324 + 5324?[SEP][MASK][MASK]"))
+print(model.generate("What is 2 + 2?[SEP][MASK][MASK]"))
+print(model.generate("What is 4 + 9?[SEP][MASK][MASK]"))
+print(model.generate("What is 9 + 18?[SEP][MASK][MASK]"))
+print(model.generate("What is 45 + 24?[SEP][MASK][MASK]"))
+print(model.generate("What is 31 + 12?[SEP][MASK][MASK]"))
+print(model.generate("What is 99 + 99?[SEP][MASK][MASK]"))

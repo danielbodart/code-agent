@@ -7,26 +7,25 @@ with a masked diffusion style training loop via PyTorch Lightning,
 plus an iterative inference procedure that un-masks tokens step by step.
 
 """
-import torch
 from masked_diffusion_model import MaskedDiffusionModel
+from src.setup import setup
+from pytorch_lightning import seed_everything
+from src.checkpoints import get_latest_checkpoint
 
+seed_everything(42)
+setup()
 
-def main():
-    # Set random seed for reproducibility
-    # seed_everything(42)
-    torch.set_float32_matmul_precision('medium')
+checkpoint = get_latest_checkpoint()
 
-    # Initialize the model
+if checkpoint is None:
     model = MaskedDiffusionModel()
-    
-    # Test the model on a sample text with device handling
-    test_text = """Question: What is the capital of Panama? Answer: [MASK][MASK]"""
-    print(f"\nTest input: {test_text}")
-    
-    # Use the model's predict method with device-aware tensors
-    for result in model.unmask(test_text):
-        print(f"Prediction: {result}")
-    
+    print("No checkpoint found, using vanilla model.")
+else:
+    model = MaskedDiffusionModel.load_from_checkpoint(checkpoint)
+    print(f"Loading checkpoint: {checkpoint}")
 
-if __name__ == "__main__":
-    main()
+print(model.generate("What is 2 + 2?[SEP][MASK]"))
+print(model.generate("What is 324 + 5324?[SEP][MASK][MASK]"))
+
+
+

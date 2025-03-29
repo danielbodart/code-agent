@@ -6,6 +6,11 @@ from src.addition_reasoning_dataset import AdditionReasoningDataset
 from pytorch_lightning import seed_everything
 from src.setup import setup
 from src.checkpoints import get_latest_checkpoint
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--checkpoint', help='Path to specific checkpoint to load')
+args = parser.parse_args()
 
 seed_everything(42)
 setup()
@@ -22,13 +27,13 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size)
 val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
 trainer = Trainer(
-    max_time="00:00:20:00",
+    max_time="00:01:50:00",
     accumulate_grad_batches=4, 
     precision="bf16-mixed",
     accelerator="gpu",
 )
 
-checkpoint = get_latest_checkpoint("lightning_logs")
+checkpoint = args.checkpoint if args.checkpoint else get_latest_checkpoint("lightning_logs")
 if checkpoint is None:
     print("No checkpoint found, starting from scratch.")
 else:

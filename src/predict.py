@@ -15,7 +15,7 @@ from src.checkpoints import get_latest_checkpoint
 seed_everything(42)
 setup()
 
-checkpoint = get_latest_checkpoint()
+checkpoint = get_latest_checkpoint("lightning_logs")
 
 if checkpoint is None:
     model = MaskedDiffusionModel()

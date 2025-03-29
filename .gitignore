@@ -9,3 +9,4 @@ wheels/
 .hypothesis
 *.zip
 *logs*
+checkpoints

@@ -2,7 +2,7 @@ import math
 from typing import Iterator
 from itertools import pairwise
 
-def loglinear(base: float = 2, growth: float = 0.25) -> Iterator[int]:
+def loglinear(base: float = 1, growth: float = 0.25) -> Iterator[int]:
     """
     Generate a loglinear sequence of values.
     

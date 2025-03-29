@@ -9,7 +9,7 @@ from src.checkpoints import get_latest_checkpoint
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--checkpoint', help='Path to specific checkpoint to load')
+parser.add_argument('--checkpoint', const='', default=None, type=str, nargs='?', help='Path to specific checkpoint to load')
 args = parser.parse_args()
 
 seed_everything(42)
@@ -33,8 +33,8 @@ trainer = Trainer(
     accelerator="gpu",
 )
 
-checkpoint = args.checkpoint if args.checkpoint else get_latest_checkpoint("lightning_logs")
-if checkpoint is None:
+checkpoint = args.checkpoint if args.checkpoint is not None else get_latest_checkpoint("lightning_logs")
+if not checkpoint:
     print("No checkpoint found, starting from scratch.")
 else:
     print(f"Training from checkpoint: {checkpoint}")
@@ -43,9 +43,13 @@ trainer.fit(model, train_loader, val_loader, ckpt_path=checkpoint)
 
 model.model.cuda()
 
-print(model.generate("What is 2 + 2?[SEP][MASK][MASK]"))
-print(model.generate("What is 4 + 9?[SEP][MASK][MASK]"))
-print(model.generate("What is 9 + 18?[SEP][MASK][MASK]"))
-print(model.generate("What is 45 + 24?[SEP][MASK][MASK]"))
-print(model.generate("What is 31 + 12?[SEP][MASK][MASK]"))
-print(model.generate("What is 99 + 99?[SEP][MASK][MASK]"))
+print(model.generate("What is 2 + 2? [MASK]"))
+print(model.generate("What is 4 + 9? [MASK]"))
+print(model.generate("What is 9 + 18? [MASK]"))
+print(model.generate("What is 45 + 24? [MASK]"))
+print(model.generate("What is 31 + 12? [MASK]"))
+print(model.generate("What is 99 + 99? [MASK]"))
+
+print(model.generate("What is [MASK] + [MASK]? 3"))
+print(model.generate("What is [MASK] + [MASK]? 27"))
+print(model.generate("What is [MASK] + [MASK]? 100"))

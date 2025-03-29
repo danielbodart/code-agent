@@ -11,25 +11,30 @@ from masked_diffusion_model import MaskedDiffusionModel
 from src.setup import setup
 from pytorch_lightning import seed_everything
 from src.checkpoints import get_latest_checkpoint
+import argparse
 
-seed_everything(42)
+parser = argparse.ArgumentParser()
+parser.add_argument('--checkpoint', const='', default=None, type=str, nargs='?', help='Path to specific checkpoint to load')
+args = parser.parse_args()
+
 setup()
 
-checkpoint = get_latest_checkpoint("lightning_logs")
+checkpoint = args.checkpoint if args.checkpoint is not None else get_latest_checkpoint("lightning_logs")
 
-if checkpoint is None:
+if not checkpoint:
     model = MaskedDiffusionModel()
     print("No checkpoint found, using vanilla model.")
 else:
     model = MaskedDiffusionModel.load_from_checkpoint(checkpoint)
     print(f"Loading checkpoint: {checkpoint}")
 
-print(model.generate("What is 2 + 2?[SEP][MASK][MASK]"))
-print(model.generate("What is 4 + 9?[SEP][MASK][MASK]"))
-print(model.generate("What is 9 + 18?[SEP][MASK][MASK]"))
-print(model.generate("What is 45 + 24?[SEP][MASK][MASK]"))
-print(model.generate("What is 31 + 12?[SEP][MASK][MASK]"))
-print(model.generate("What is 99 + 99?[SEP][MASK][MASK]"))
+print(model.generate("What is 2 + 2? [MASK]"))
+print(model.generate("What is 4 + 9? [MASK]"))
+print(model.generate("What is 9 + 18? [MASK]"))
+print(model.generate("What is 45 + 24? [MASK]"))
+print(model.generate("What is 31 + 12? [MASK]"))
+print(model.generate("What is 99 + 99? [MASK]"))
 
-
-
+print(model.generate("What is [MASK] + [MASK]? 3"))
+print(model.generate("What is [MASK] + [MASK]? 27"))
+print(model.generate("What is [MASK] + [MASK]? 100"))

@@ -3,7 +3,6 @@ import sh # type: ignore
 import os
 from datetime import UTC, datetime
 import sys
-import unittest
 
 def version():
     branch = os.getenv('CIRCLE_BRANCH', sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip())
@@ -23,9 +22,9 @@ def check():
 
 def test(test_name = None):
     if test_name is None:
-        sh.uv('run', 'python', '-m', 'unittest', 'discover', 'test', _out=sys.stdout, _err=sys.stderr)
+        sh.uv('run', 'python', '-m', 'pytest', 'test', _out=sys.stdout, _err=sys.stderr)
     else:
-        sh.uv('run', 'python', '-m', 'unittest', test_name, _out=sys.stdout, _err=sys.stderr)
+        sh.uv('run', 'python', '-m', 'pytest', test_name, _out=sys.stdout, _err=sys.stderr)
 
 
 def build():

@@ -134,7 +134,7 @@ class MaskedDiffusionState:
             A new BERTDiffuser instance with masked tokens
         """
         # Only consider tokens that are maskable
-        mask = (torch.rand_like(self.input_ids.float()) < percentage) & (self.maskable == 1)
+        mask = (torch.rand_like(self.input_ids.float()) <= percentage) & (self.maskable == 1)
 
         # Create masked inputs
         masked_inputs = self.input_ids.clone()

@@ -14,7 +14,6 @@ class ReasoningExample:
     including methods for creating, formatting, and masking examples.
     """
     question: str
-    reasoning_steps: List[str]
     answer: str
     
     def __iter__(self) -> Iterator[str]:
@@ -23,7 +22,6 @@ class ReasoningExample:
         This allows unpacking like: question, reasoning, answer = example
         """
         yield self.question
-        # yield "\n".join(self.reasoning_steps)
         yield self.answer
 
     def __str__(self) -> str:

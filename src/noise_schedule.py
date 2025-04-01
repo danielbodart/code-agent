@@ -30,7 +30,7 @@ def fibonacci() -> Iterator[int]:
 
 def noise_schedule(tokens: int, generator = loglinear) -> Iterator[int]:
     """
-    Calculate how many tokens to unmask at each step using a Fibonacci schedule.
+    Calculate how many tokens to unmask at each step using a generator schedule.
     
     Args:
         tokens: The target total number of tokens to unmask

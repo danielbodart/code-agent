@@ -15,7 +15,7 @@ class TestMaskedDiffusionModel(unittest.TestCase):
         model = MaskedDiffusionModel()
         tokenizer = model.tokenizer
         
-        dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100)
+        dataset = AdditionReasoningDataset(tokenizer, num_examples=100, max_number=100, max_tokens=16)
         dataloader = DataLoader(dataset, batch_size=32)
         
         trainer = Trainer(
@@ -35,9 +35,13 @@ class TestMaskedDiffusionModel(unittest.TestCase):
         model.model.cuda()
         
         with torch.no_grad():
-            print(model.generate("What is 2 + 2?[SEP][MASK]"))
-            print(model.generate("What is 3 + 5?[SEP][MASK]"))
-            print(model.generate("What is 10 + 7?[SEP][MASK]"))
+            # print(model.generate("What is 2 + 2?[SEP][MASK]"))
+            # print(model.generate("What is 3 + 5?[SEP][MASK]"))
+            # print(model.generate("What is 10 + 7?[SEP][MASK]"))
+            # print(model.generate("What is 45 + 24?[SEP][MASK]"))
+            # print(model.generate("What is 31 + 12?[SEP][MASK]"))
+            for text in model.unmask("What is 99 + 99?[SEP][MASK]", max_length=16, skip_special_tokens=False):
+                print(text)
         
     def test_generate(self):
         

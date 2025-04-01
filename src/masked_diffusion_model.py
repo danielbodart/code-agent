@@ -81,7 +81,7 @@ class MaskedDiffusionModel(pl.LightningModule):
             yield (current_state := self.predict_step(current_state, masks_in_step))
 
 
-    def unmask(self, input_text, max_length=512):
+    def unmask(self, input_text, max_length=512, skip_special_tokens=True):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Yields intermediate steps as an iterator.
@@ -89,16 +89,16 @@ class MaskedDiffusionModel(pl.LightningModule):
         state = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(input_text)], max_length=max_length))
         for updated in self.predict(state):
             # Yield the decoded text at each step
-            yield self.tokenizer.decode(updated.input_ids[0], skip_special_tokens=True)
+            yield self.tokenizer.decode(updated.input_ids[0], skip_special_tokens=skip_special_tokens)
 
 
-    def generate(self, input_text, max_length=512):
+    def generate(self, input_text, max_length=512, skip_special_tokens=True):
         """
         Iterative unmasking: Takes an input text with [MASK] tokens and gradually fills it in.
         - Returns only the final result.
         """
         final_result = None
-        for result in self.unmask(input_text, max_length):
+        for result in self.unmask(input_text, max_length, skip_special_tokens):
             final_result = result
         return final_result
 

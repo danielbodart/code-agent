@@ -5,64 +5,44 @@ from transformers import AutoTokenizer
 
 from src.masked_diffusion_state import MaskedDiffusionState, tokenize
 from src.reasoning_example import ReasoningExample
+from pytorch_lightning import seed_everything
 
+seed_everything(42)
 
 class TestMaskedDiffusionState(unittest.TestCase):
     tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-large")
 
     def test_tokenization(self):
-        example = ReasoningExample(
-            "Question",
-            ["Reasoning Step 1", "Reasoning Step 2"],
-            "Answer"
-        )
+        example = ReasoningExample("Question", "Answer")
 
-        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)], max_length=6))
+        decoded = self.tokenizer.decode(tokenized.input_ids[0], skip_special_tokens=False)
 
-        self.assertEqual(tokenized.input_ids[0, :3].tolist(), [self.tokenizer.cls_token_id, 23433, self.tokenizer.sep_token_id])
-        self.assertEqual(tokenized.attention_mask[0, :3].tolist(), [1, 1, 1])
-
-        self.assertEqual(tokenized.input_ids[0, 3:5].tolist(), [40722, 272])
-        self.assertEqual(tokenized.attention_mask[0, 3:5].tolist(), [1, 1])
-
-        # Ignores the padding
-        self.assertEqual(tokenized.input_ids[0, 14:16].tolist(), [self.tokenizer.sep_token_id, self.tokenizer.pad_token_id])
-        self.assertEqual(tokenized.attention_mask[0, 14:16].tolist(), [1, 0])
+        self.assertEqual("[CLS]Question[SEP]Answer[SEP][PAD]", decoded)
+        self.assertEqual(tokenized.attention_mask[0].tolist(), [1, 1, 1, 1, 1, 0])
 
     def test_can_mask_tokens(self):
-        example = ReasoningExample(
-            "Should get masked",
-            ["Should get masked"],
-            "Should get masked"
-        )
+        example = ReasoningExample("Can get masked", "Can get masked")
 
-        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)]))
+        tokenized = MaskedDiffusionState.from_batch(self.tokenizer, tokenize(self.tokenizer, [str(example)], max_length=10))
         
-        # With the new implementation, all tokens are maskable
-        # So we need to check that tokens are being masked based on the percentage
-        
-        # First, let's verify that with 0% masking, nothing gets masked
-        no_masking = next(iter(tokenized.mask(percentage=0)))
-        self.assertNotIn("[MASK]", no_masking)
-        
-        # Then, with 100% masking, everything should be masked
-        full_masking = next(iter(tokenized.mask(percentage=1)))
-        
-        # The output should be all [MASK] tokens
-        # Count the number of [MASK] tokens
-        mask_count = full_masking.count("[MASK]")
-        
-        # Get the total number of tokens (excluding padding)
-        total_tokens = tokenized.attention_mask[0].sum().item()
-        
-        # All tokens should be masked
-        self.assertEqual(mask_count, total_tokens)
+        no_masking = tokenized.mask(percentage=0)
+        no_masking_decoded = self.tokenizer.decode(no_masking.input_ids[0], skip_special_tokens=False)
+        self.assertEqual("[CLS]Can get masked[SEP]Can get masked[SEP][PAD]", no_masking_decoded)
+
+        # half_masking = tokenized.mask(percentage=0.5)
+        # half_masking_decoded = self.tokenizer.decode(half_masking.input_ids[0], skip_special_tokens=False)
+        # self.assertEqual("[CLS]Can get masked[SEP][MASK] get masked[MASK][PAD]", half_masking_decoded)
+
+        full_masking = tokenized.mask(percentage=1)
+        full_masking_decoded = self.tokenizer.decode(full_masking.input_ids[0], skip_special_tokens=False)
+        self.assertEqual("[MASK][MASK][MASK][MASK][MASK][MASK][MASK][MASK][MASK][MASK]", full_masking_decoded)
+
 
     def test_maskable(self):
         # All tokens should be maskable
         example = ReasoningExample(
             "ignore",
-            ["one", "two"],
             "three"
         )
 
@@ -75,13 +55,11 @@ class TestMaskedDiffusionState(unittest.TestCase):
         """Test that the lengths property correctly calculates the length of each example."""
         example1 = ReasoningExample(
             "short question",
-            ["short reasoning"],
             "short answer"
         )
 
         example2 = ReasoningExample(
             "longer question with more tokens",
-            ["first reasoning step", "second reasoning step"],
             "longer answer with more tokens too"
         )
 
@@ -90,14 +68,13 @@ class TestMaskedDiffusionState(unittest.TestCase):
         lengths = tokenized.lengths
 
         self.assertEqual(lengths.shape, (2,))
-        self.assertEqual(lengths[0].item(), 10)
-        self.assertEqual(lengths[1].item(), 24)
+        self.assertEqual(lengths[0].item(), 7)
+        self.assertEqual(lengths[1].item(), 16)
 
     def test_mask_percentage(self):
         """Test that masking with percentage produces reasonable results."""
         example = ReasoningExample(
             "This is a question",
-            ["This is reasoning step one"],
             "This is the answer"
         )
 
@@ -117,7 +94,6 @@ class TestMaskedDiffusionState(unittest.TestCase):
     def test_update(self):
         example = ReasoningExample(
             "This is a question",
-            ["This is reasoning"],
             "This is an answer"
         )
 

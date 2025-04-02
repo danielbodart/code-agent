@@ -26,15 +26,17 @@ def test_can_mask_tokens():
     no_masking = tokenized.mask(percentage=0)
     no_masking_decoded = tokenizer.decode(no_masking.input_ids[0], skip_special_tokens=False)
     assert no_masking_decoded == "[CLS]Can get masked[SEP]Can get masked[SEP][PAD]"
+    assert (no_masking.input_ids == tokenizer.mask_token_id).sum().item() == 0
 
-    # half_masking = tokenized.mask(percentage=0.5)
-    # half_masking_decoded = tokenizer.decode(half_masking.input_ids[0], skip_special_tokens=False)
-    # assert half_masking_decoded == "[CLS]Can get masked[SEP][MASK] get masked[MASK][PAD]"
+    half_masking = tokenized.mask(percentage=0.5)
+    num_maskable = tokenized.maskable[0].sum().item()
+    expected_masked = int(num_maskable * 0.5)
+    assert (half_masking.input_ids[0] == tokenizer.mask_token_id).sum().item() == expected_masked
 
     full_masking = tokenized.mask(percentage=1)
     full_masking_decoded = tokenizer.decode(full_masking.input_ids[0], skip_special_tokens=False)
     assert full_masking_decoded == "[MASK][MASK][MASK][MASK][MASK][MASK][MASK][MASK][MASK][MASK]"
-
+    assert (full_masking.input_ids == tokenizer.mask_token_id).sum().item() == num_maskable
 
 def test_maskable():
     example = ReasoningExample("ignore", "three")

@@ -124,21 +124,29 @@ class MaskedDiffusionState:
 
     def mask(self, percentage: float):
         """
-        Masks a percentage of the tokens in the collection.
-        Only masks tokens that are marked as maskable.
+        Masks exactly the specified percentage of maskable tokens in each example.
 
         Args:
             percentage: Percentage of maskable tokens to mask (0.0 to 1.0)
 
         Returns:
-            A new BERTDiffuser instance with masked tokens
+            A new MaskedDiffusionState instance with masked tokens
         """
-        # Only consider tokens that are maskable
-        mask = (torch.rand_like(self.input_ids.float()) <= percentage) & (self.maskable == 1)
-
-        # Create masked inputs
         masked_inputs = self.input_ids.clone()
-        masked_inputs[mask] = self.tokenizer.mask_token_id
+        
+        # Process each example in the batch separately to ensure exact percentage
+        for i in range(self.input_ids.size(0)):
+            maskable = self.maskable[i]
+            num_maskable = maskable.sum().item()
+            num_to_mask = int(num_maskable * percentage)
+            
+            # Get indices of maskable tokens
+            maskable_indices = torch.where(maskable == 1)[0]
+            
+            if num_to_mask > 0:
+                # Randomly select exactly num_to_mask indices
+                mask_indices = maskable_indices[torch.randperm(len(maskable_indices))[:num_to_mask]]
+                masked_inputs[i, mask_indices] = self.tokenizer.mask_token_id
 
         return MaskedDiffusionState(self.tokenizer, masked_inputs, self.attention_mask, self.original_ids)
 

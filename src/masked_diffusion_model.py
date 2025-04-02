@@ -40,30 +40,6 @@ class MaskedDiffusionModel(pl.LightningModule):
         return loss
         
 
-    def predict_step(self, state, number_of_masks):
-        """
-        Performs one step of the prediction process, unmasking the most confident positions.
-        
-        Args:
-            state: Current MaskedDiffusionState
-            number_of_masks: Number of positions to unmask
-            
-        Returns:
-            Updated MaskedDiffusionState
-        """
-        # Forward pass to get logits
-        logits = self.forward(state).logits
-        
-        # Calculate which positions to update
-        update_mask = select_top_confidence_positions(state, logits, number_of_masks)
-        
-        # Sample from the model's distribution
-        sampled_tokens = gumbel_max_sampling(logits)
-        
-        # Update state with new tokens using the update mask
-        return state.update(sampled_tokens, update_mask)
-
-
     def predict(self, state: MaskedDiffusionState) -> Iterator[MaskedDiffusionState]:
         """
         Iterative unmasking generator: Takes masked MaskedDiffusionState and gradually fills them in.
@@ -78,7 +54,18 @@ class MaskedDiffusionModel(pl.LightningModule):
         total_masks = current_state.masked.sum().item()
         
         for masks_in_step in noise_schedule(total_masks):
-            yield (current_state := self.predict_step(current_state, masks_in_step))
+            # Forward pass to get logits
+            logits = self.forward(current_state).logits
+            
+            # Calculate which positions to update
+            update_mask = select_top_confidence_positions(current_state, logits, masks_in_step)
+            
+            # Sample from the model's distribution
+            sampled_tokens = gumbel_max_sampling(logits)
+            
+            # Update state with new tokens using the update mask
+            current_state = current_state.update(sampled_tokens, update_mask)
+            yield current_state
 
 
     def unmask(self, input_text, max_length=512, skip_special_tokens=True):

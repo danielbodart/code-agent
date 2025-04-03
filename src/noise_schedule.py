@@ -27,8 +27,28 @@ def fibonacci() -> Iterator[int]:
         yield a
         a, b = b, a + b
 
+def cosine(base: float = 10, period: float = 4 * math.pi) -> Iterator[int]:
+    """
+    Generate a sequence of values following a shifted and scaled cosine curve.
+    
+    The cosine function is shifted and scaled to ensure positive integer values
+    with a smooth progression.
+    
+    Args:
+        base: Base amplitude of the sequence
+        period: Period of the cosine function, controls growth rate
+        
+    Yields:
+        Sequence of integers with cosine-based growth
+    """
+    step = 0
+    while True:
+        # Shift and scale cosine to ensure positive values with desired growth
+        current = max(1, int(base * (1 - math.cos(step / period))))
+        yield current
+        step += 1
 
-def noise_schedule(tokens: int, generator = loglinear) -> Iterator[int]:
+def noise_schedule(tokens: int, generator: Iterator[int]) -> Iterator[int]:
     """
     Calculate how many tokens to unmask at each step using a generator schedule.
     
@@ -48,7 +68,7 @@ def noise_schedule(tokens: int, generator = loglinear) -> Iterator[int]:
         return
 
     sum = 0
-    for (a, b) in pairwise(generator()):
+    for (a, b) in pairwise(generator):
         if a == 0:
             continue
         sum += a
@@ -73,7 +93,7 @@ if __name__ == "__main__":
     ]
     
     for token_count in examples:
-        schedule = list(noise_schedule(token_count))
+        schedule = list(noise_schedule(token_count, cosine()))
         print(f"\nTokens: {token_count}")
         print(f"Schedule: {schedule}")
         print(f"Steps: {len(schedule)}")

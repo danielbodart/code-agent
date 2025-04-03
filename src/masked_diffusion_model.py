@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from typing import Iterator
 from transformers import AutoTokenizer
-from src.noise_schedule import noise_schedule
+from src.noise_schedule import noise_schedule, cosine
 from src.update_mask import select_top_confidence_positions, gumbel_max_sampling
 
 from transformers import ModernBertForMaskedLM
@@ -53,7 +53,7 @@ class MaskedDiffusionModel(pl.LightningModule):
         current_state = state
         max_masked_tokens = current_state.masked.sum(dim=1).max().item()
 
-        for masks_in_step in noise_schedule(max_masked_tokens):
+        for masks_in_step in noise_schedule(max_masked_tokens, cosine()):
             # Forward pass to get logits
             logits = self.forward(current_state).logits
             

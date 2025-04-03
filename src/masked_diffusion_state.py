@@ -133,21 +133,21 @@ class MaskedDiffusionState:
             A new MaskedDiffusionState instance with masked tokens
         """
         masked_inputs = self.input_ids.clone()
+        num_maskable = self.maskable.sum(dim=1)
+        num_to_mask = (num_maskable * percentage).long()
         
-        # Process each example in the batch separately to ensure exact percentage
-        for i in range(self.input_ids.size(0)):
-            maskable = self.maskable[i]
-            num_maskable = maskable.sum().item()
-            num_to_mask = int(num_maskable * percentage)
-            
-            # Get indices of maskable tokens
-            maskable_indices = torch.where(maskable == 1)[0]
-            
-            if num_to_mask > 0:
-                # Randomly select exactly num_to_mask indices
-                mask_indices = maskable_indices[torch.randperm(len(maskable_indices))[:num_to_mask]]
-                masked_inputs[i, mask_indices] = self.tokenizer.mask_token_id
-
+        rand = torch.rand_like(self.maskable.float(), device=self.maskable.device)
+        rand = rand * self.maskable
+        sorted_indices = rand.argsort(dim=1, descending=True)
+        
+        position_range = torch.arange(sorted_indices.size(1), device=sorted_indices.device)
+        position_range = position_range.expand(sorted_indices.size(0), -1)
+        update_mask = position_range < num_to_mask.unsqueeze(1)
+        
+        final_mask = torch.zeros_like(self.maskable, dtype=update_mask.dtype)
+        final_mask.scatter_(1, sorted_indices, update_mask)
+        
+        masked_inputs = torch.where(final_mask == 1, self.tokenizer.mask_token_id, masked_inputs)
         return MaskedDiffusionState(self.tokenizer, masked_inputs, self.attention_mask, self.original_ids)
 
     def update(self, predicted_ids, update_mask=None):

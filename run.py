@@ -20,11 +20,11 @@ def check():
     sh.mypy('src', '--ignore-missing-imports', _out=sys.stdout, _err=sys.stderr)
 
 
-def test(test_name = None):
-    if test_name is None:
+def test(*args):
+    if not args:
         sh.uv('run', 'python', '-m', 'pytest', 'test', _out=sys.stdout, _err=sys.stderr)
     else:
-        sh.uv('run', 'python', '-m', 'pytest', test_name, _out=sys.stdout, _err=sys.stderr)
+        sh.uv('run', 'python', '-m', 'pytest', *args, _out=sys.stdout, _err=sys.stderr)
 
 
 def build():

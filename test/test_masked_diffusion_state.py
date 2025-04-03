@@ -91,3 +91,17 @@ def test_update():
 
     assert torch.all(updated.input_ids[masked.maskable == 1] == predicted_ids.view(-1)[:masked.maskable.sum()])
     assert torch.all(updated.input_ids[masked.maskable == 0] == masked.input_ids[masked.maskable == 0])
+
+def test_can_mask_tokens_batch():
+    examples = [ReasoningExample("short", "answer"), ReasoningExample("longer question", "longer answer")]
+    tokenized = MaskedDiffusionState.from_batch(tokenizer, tokenize(tokenizer, [str(e) for e in examples], max_length=10))
+    
+    no_masking = tokenized.mask(percentage=0)
+    assert (no_masking.input_ids == tokenizer.mask_token_id).sum(dim=1).tolist() == [0, 0]
+
+    half_masking = tokenized.mask(percentage=0.5)
+    expected_masked = (tokenized.maskable.sum(dim=1) * 0.5).long()
+    assert torch.all((half_masking.input_ids == tokenizer.mask_token_id).sum(dim=1) == expected_masked)
+
+    full_masking = tokenized.mask(percentage=1)
+    assert torch.all((full_masking.input_ids == tokenizer.mask_token_id).sum(dim=1) == tokenized.maskable.sum(dim=1))

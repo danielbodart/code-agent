@@ -51,14 +51,14 @@ class MaskedDiffusionModel(pl.LightningModule):
             MaskedDiffusionState: Current state of MaskedDiffusionState with some positions unmasked
         """
         current_state = state
-        total_masks = current_state.masked.sum().item()
-        
-        for masks_in_step in noise_schedule(total_masks):
+        max_masked_tokens = current_state.masked.sum(dim=1).max().item()
+
+        for masks_in_step in noise_schedule(max_masked_tokens):
             # Forward pass to get logits
             logits = self.forward(current_state).logits
             
             # Calculate which positions to update
-            update_mask = select_top_confidence_positions(current_state, logits, masks_in_step)
+            update_mask = select_top_confidence_positions(current_state.masked, logits, masks_in_step)
             
             # Sample from the model's distribution
             sampled_tokens = gumbel_max_sampling(logits)
